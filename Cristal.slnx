@@ -1,0 +1,6 @@
+<Solution>
+  <Project Path="Cristal/Cristal.csproj" />
+  <Project Path="CristalSandbox/CristalSandbox.csproj" />
+  <Project Path="CristalTest/CristalTest.csproj" />
+  <Project Path="MonoCristal/MonoCristal.csproj" />
+</Solution>
