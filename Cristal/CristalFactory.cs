@@ -1,6 +1,9 @@
 ﻿using System;
 
 namespace MonoCristal {
+    /// <summary>
+    /// TODO
+    /// </summary>
     public sealed class CristalFactory {
 
         /// <summary>
@@ -30,12 +33,12 @@ namespace MonoCristal {
         /// Create a <c>CristalFactory</c> with a provided starting seed.
         /// See <see cref="Random(int)"/> for more information on pseudo-random number generation and seeding.
         /// </summary>
-        /// <param name="seed">Initial seed provided to a pseudo-random number generator (PRNG). Using the same seed across object instances or program lifetimes allows for deterministic behaviors.</param>
+        /// <param name="seed">
+        /// Initial seed provided to a pseudo-random number generator (PRNG). Using the same seed across object instances or program lifetimes allows for deterministic behaviors.
+        /// </param>
         public CristalFactory(int seed) {
             _random = new Random(seed);
         }
-
-
 
     }
 }
