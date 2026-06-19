@@ -19,7 +19,7 @@ namespace CristalDesigner {
     /// </summary>
     public partial class MainWindow:Window {
 
-        public const int TEXTURE_SIZE = 128;
+        public const int TEXTURE_SIZE = 2048;
 
         public const float DEFAULT_SCALE = 10.0f;
         public const float SCALE_STEP = 0.5f;

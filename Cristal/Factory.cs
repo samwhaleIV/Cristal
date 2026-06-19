@@ -1,4 +1,6 @@
-﻿namespace Cristal {
+﻿using System.Buffers;
+
+namespace Cristal {
     /// <summary>
     /// TODO
     /// </summary>
@@ -7,6 +9,8 @@
         /// Source of pseudo-random number generation (PRNG) used in procedural generation routines.
         /// </summary>
         private readonly Random _random;
+
+        private readonly ArrayPool<byte> _arrayPool = ArrayPool<byte>.Create();
 
         /// <summary>
         /// Create a <c>CristalFactory</c> with a <c>Random</c> object that may be shared with another system.
@@ -39,7 +43,7 @@
 
         public Texture<float> CreateNoiseTexture(TextureSize textureSize,float scale) {
 
-            Texture<float> texture = new(textureSize);
+            Texture<float> texture = new(textureSize,_arrayPool);
             Span<float> data = texture.Data;
             long seed = _random.NextInt64();
 
