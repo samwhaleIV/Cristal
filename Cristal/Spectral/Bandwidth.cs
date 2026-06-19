@@ -55,7 +55,7 @@
 
         /// <summary>
         /// <para>
-        /// The range/distance of this bandwidth. I.e., the absolute distance between the high and low cutoff frequencies.
+        /// The range/distance of this bandwidth. I.e., the absolute distance between the high and low cutoff frequencies. This should not include <see cref="MIN_RANGE"/>. It is <i>extra</i>.
         /// </para>
         /// <para>
         /// (Note: a <c>_high</c> field does not exist because length encoding is used to ensure struct <c>default</c> correctness guarantees.)

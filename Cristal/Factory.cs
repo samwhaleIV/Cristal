@@ -1,11 +1,8 @@
-﻿using System;
-
-namespace MonoCristal {
+﻿namespace Cristal {
     /// <summary>
     /// TODO
     /// </summary>
-    public sealed class CristalFactory {
-
+    public sealed class Factory {
         /// <summary>
         /// Source of pseudo-random number generation (PRNG) used in procedural generation routines.
         /// </summary>
@@ -16,7 +13,7 @@ namespace MonoCristal {
         /// Parameter <paramref name="externalRandom"/> will be preserved locally.
         /// </summary>
         /// <param name="externalRandom">External <c>Random</c> object. Reference will be retained by the new <c>CristalFactory</c>.</param>
-        public CristalFactory(Random externalRandom) {
+        public Factory(Random externalRandom) {
             _random = externalRandom;
         }
 
@@ -25,7 +22,7 @@ namespace MonoCristal {
         /// Starting seed is determined by the default <c>System.Random</c> implementation.
         /// See <see cref="Random()"/> for more information.
         /// </summary>
-        public CristalFactory() {
+        public Factory() {
             _random = new Random();
         }
 
@@ -36,9 +33,32 @@ namespace MonoCristal {
         /// <param name="seed">
         /// Initial seed provided to a pseudo-random number generator (PRNG). Using the same seed across object instances or program lifetimes allows for deterministic behaviors.
         /// </param>
-        public CristalFactory(int seed) {
+        public Factory(int seed) {
             _random = new Random(seed);
         }
 
+        public Texture<float> CreateNoiseTexture(TextureSize textureSize,float scale) {
+
+            Texture<float> texture = new(textureSize);
+            Span<float> data = texture.Data;
+            long seed = _random.NextInt64();
+
+            // Noise scales vertically with 'size.Height'
+            double pixelScale = 1.0 / (textureSize.Height - 1) * scale;
+
+            for(int y = 0; y < textureSize.Height; y++) {
+                for(int x = 0; x < textureSize.Width; x++) {
+                    float value = OpenSimplex2S.Noise2_ImproveX(seed,x * pixelScale,y * pixelScale);
+
+                    // Value is in range '-1.0' to '1.0', apply basic formula to align to '0.0' to '1.0.
+                    value = (value + 1f) * 0.5f;
+
+                    int index = y * textureSize.Width + x;
+                    data[index] = value;
+                }
+            }
+
+            return texture;
+        }
     }
 }

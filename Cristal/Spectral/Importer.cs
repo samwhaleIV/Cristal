@@ -1,7 +1,6 @@
-﻿using Cristal.Spectral;
-using System.Buffers;
+﻿using System.Buffers;
 
-namespace Cristal {
+namespace Cristal.Spectral {
     public sealed class Importer {
 
         //private readonly ArrayPool<byte> _arrayPool;
