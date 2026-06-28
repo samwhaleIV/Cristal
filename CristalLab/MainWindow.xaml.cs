@@ -1,6 +1,7 @@
-using CristalLab.Pages;
+using Microsoft.UI;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
+using Microsoft.UI.Xaml.Media;
 
 namespace CristalLab {
     public sealed partial class MainWindow:Window {
@@ -11,14 +12,16 @@ namespace CristalLab {
             TabViewItem tabViewItem = new() {
                 Header = $"Document {++TabCounter}",
                 IconSource =  new SymbolIconSource { Symbol = Symbol.Document },
-                Content = new TabViewNavView()
+                Content = new WorkspaceRoot()
             };
             return tabViewItem;
         }
 
         public MainWindow() {
             InitializeComponent();
-            ExtendsContentIntoTitleBar = false;
+            ExtendsContentIntoTitleBar = true;
+            SetTitleBar(CustomDragRegion);
+            CustomDragRegion.MinWidth = 188;
         }
 
 

@@ -10,11 +10,10 @@
     Title="CristalLab">
 
     <Window.SystemBackdrop>
-        <MicaBackdrop />
+        <MicaBackdrop Kind="BaseAlt"/>
     </Window.SystemBackdrop>
     <TabView
         x:Name="RootTabView"
-        Background="Transparent"
         VerticalAlignment="Stretch"
         HorizontalAlignment="Stretch"
         AddTabButtonClick="RootTabView_AddTabButtonClick"
@@ -24,6 +23,13 @@
         IsAddTabButtonVisible="True"
         Padding="0,8,0,0"
         Margin="0">
+        <TabView.TabStripFooter>
+            <Grid x:Name="CustomDragRegion" Background="Transparent" />
+        </TabView.TabStripFooter>
+        <TabView.Resources>
+            <SolidColorBrush x:Key="TabViewItemHeaderBackgroundSelected" Color="{ThemeResource LayerFillColorDefault}" />
+            <Thickness x:Key="TabViewItemHeaderMargin">0</Thickness>
+        </TabView.Resources>
     </TabView>
 
 </Window>

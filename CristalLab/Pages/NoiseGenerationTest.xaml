@@ -1,5 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
-<Page
+<cristallab:WorkspacePage
+    xmlns:cristallab="using:CristalLab"
     x:Class="CristalLab.Pages.NoiseGenerationTest"
     xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
@@ -9,27 +10,38 @@
     mc:Ignorable="d"
     NavigationCacheMode="Required">
 
-    <Grid Margin="24">
+    <cristallab:WorkspacePage.Resources>
+        <local:ResolutionStringFormatter x:Key="ResolutionConverter" />
+        <local:ScaleStringFormatter x:Key="ScaleConverter" />
+    </cristallab:WorkspacePage.Resources>
+
+    <Grid Margin="12" CornerRadius="4">
         <Grid.ColumnDefinitions>
             <ColumnDefinition Width="Auto" />
             <ColumnDefinition/>
         </Grid.ColumnDefinitions>
-        <StackPanel Margin="0,0,24,0" Grid.Column="0" Grid.ColumnSpan="1" Spacing="16" HorizontalAlignment="Left" Width="300" MaxWidth="300">
+        <StackPanel BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}" BorderThickness="1" Padding="24" CornerRadius="4" Background="{ThemeResource CardBackgroundFillColorDefaultBrush}" Margin="0,0,12,0" Grid.Column="0" Grid.ColumnSpan="1" Spacing="16" VerticalAlignment="Top" HorizontalAlignment="Left" Width="360">
 
-            <TextBlock Text="Noise Generation Test" Style="{ThemeResource TitleTextBlockStyle}"/>
+            <TextBlock Text="Noise Generation" Style="{ThemeResource TitleTextBlockStyle}"/>
+            <TextBlock Text="Generate a texture using the OpenSimplex2S procedural noise algorithm. Choose an output resolution and a scale (zoom level)." Style="{ThemeResource BodyTextBlockStyle}"/>
 
-            <Slider Header="Resolution" Minimum="0" Maximum="100" TickFrequency="10" StepFrequency="10" SnapsTo="Ticks"></Slider>
+            <Slider x:Name="ResolutionSlider" Header="Texture resolution:" Minimum="2" Maximum="12" Value="8" SmallChange="1" TickFrequency="1" StepFrequency="1" SnapsTo="Ticks"/>
 
-            <Slider Header="Scale" Minimum="0" Maximum="100"></Slider>
+            <Slider x:Name="ScaleSlider" Header="Noise scale:" Minimum="0.1" Value="10.0" SmallChange="0.1" StepFrequency="0.1" Maximum="100.0"/>
 
             <TextBlock TextWrapping="Wrap" Style="{ThemeResource BodyTextBlockStyle}">
-                <Run Text="256x256" />
-                <Run Text="@" />
-                <Run Text="1.0" />
+                <Run Text="Resolution: "/>
+                <Run FontWeight="SemiBold" Text="{x:Bind ResolutionSlider.Value, Converter={StaticResource ResolutionConverter}, Mode=OneWay}"/>
+                <Run Text=" Scale: " />
+                <Run FontWeight="SemiBold" Text="{x:Bind ScaleSlider.Value, Converter={StaticResource ScaleConverter}, Mode=OneWay}"/>
             </TextBlock>
-            <Button Content="Generate" Style="{StaticResource AccentButtonStyle}" HorizontalAlignment="Stretch"/>
+
+            <Button Padding="12" Content="Generate New Texture" Style="{StaticResource AccentButtonStyle}" HorizontalAlignment="Stretch" Click="Button_Click"/>
 
         </StackPanel>
-        <Grid Grid.Column="1" Grid.ColumnSpan="1" Background="Red"></Grid>
+        <Grid Grid.Column="1" Grid.ColumnSpan="1" BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}" BorderThickness="1" Background="Black" CornerRadius="4" Padding="12" Margin="0">
+
+            <Image x:Name="BitmapContainer" Stretch="Uniform" HorizontalAlignment="Stretch" VerticalAlignment="Stretch"/>
+        </Grid>
     </Grid>
-</Page>
+</cristallab:WorkspacePage>

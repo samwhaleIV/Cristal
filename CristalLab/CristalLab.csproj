@@ -17,7 +17,6 @@
   </PropertyGroup>
   <ItemGroup>
     <None Remove="Pages\NoiseGenerationTest.xaml" />
-    <None Remove="Pages\TabHomePage.xaml" />
     <None Remove="Pages\TestPage.xaml" />
   </ItemGroup>
 
@@ -48,7 +47,10 @@
     <PackageReference Include="Microsoft.WindowsAppSDK" Version="2.2.0" />
   </ItemGroup>
   <ItemGroup>
-    <Page Update="Pages\TabHomePage.xaml">
+    <ProjectReference Include="..\Cristal\Cristal.csproj" />
+  </ItemGroup>
+  <ItemGroup>
+    <Page Update="Pages\HomePage.xaml">
       <Generator>MSBuild:Compile</Generator>
     </Page>
   </ItemGroup>

@@ -10,7 +10,24 @@
                 <XamlControlsResources xmlns="using:Microsoft.UI.Xaml.Controls" />
                 <!-- Other merged dictionaries here -->
             </ResourceDictionary.MergedDictionaries>
-            <!-- Other app resources here -->
+            <SolidColorBrush x:Key="MyAppContentBackground" Color="#FF202020" />
+            <SolidColorBrush x:Key="MyBrandAccentColor" Color="#FF0078D7" />
+
+            <ResourceDictionary.ThemeDictionaries>
+                <ResourceDictionary x:Key="Default">
+                    <StaticResource x:Key="TabViewItemHeaderBackgroundSelected" ResourceKey="MyAppContentBackground" />
+
+                    <SolidColorBrush x:Key="TabViewBorderBrush" Color="Transparent"/>
+
+                    <SolidColorBrush x:Key="TabViewBackground" Color="Transparent" />
+                </ResourceDictionary>
+
+                <ResourceDictionary x:Key="Light">
+                    <SolidColorBrush x:Key="MyAppContentBackground" Color="#FFF3F3F3" />
+                    <StaticResource x:Key="TabViewItemHeaderBackgroundSelected" ResourceKey="MyAppContentBackground" />
+                    <SolidColorBrush x:Key="TabViewBorderBrush" Color="Transparent"/>
+                </ResourceDictionary>
+            </ResourceDictionary.ThemeDictionaries>
         </ResourceDictionary>
     </Application.Resources>
 </Application>

@@ -1,28 +1,39 @@
 using Microsoft.UI.Xaml;
-using Microsoft.UI.Xaml.Controls;
-using Microsoft.UI.Xaml.Controls.Primitives;
-using Microsoft.UI.Xaml.Data;
-using Microsoft.UI.Xaml.Input;
-using Microsoft.UI.Xaml.Media;
-using Microsoft.UI.Xaml.Navigation;
+using Microsoft.UI.Xaml.Media.Imaging;
 using System;
-using System.Collections.Generic;
-using System.IO;
-using System.Linq;
 using System.Runtime.InteropServices.WindowsRuntime;
-using Windows.Foundation;
-using Windows.Foundation.Collections;
-
-// To learn more about WinUI, the WinUI project structure,
-// and more about our project templates, see: http://aka.ms/winui-project-info.
 
 namespace CristalLab.Pages {
-    /// <summary>
-    /// An empty page that can be used on its own or navigated to within a Frame.
-    /// </summary>
-    public sealed partial class NoiseGenerationTest:Page {
+
+    public sealed partial class NoiseGenerationTest:WorkspacePage {
+
+        private WriteableBitmap? _output = null;
+
         public NoiseGenerationTest() {
             InitializeComponent();
+        }
+
+        private void Button_Click(object sender,RoutedEventArgs e) {
+            int resolution = (int)Math.Pow(2,Math.Round(ResolutionSlider.Value));
+            if(_output is null || (_output.PixelWidth != resolution || _output.PixelHeight != resolution)) {
+                _output = new(resolution,resolution);
+                BitmapContainer.Source = _output;
+            }
+
+            using var noiseTexture = Session.CristalFactory.CreateNoiseTexture(new Cristal.TextureSize(resolution),(float)ScaleSlider.Value);
+
+            using var pixelStream = _output.PixelBuffer.AsStream();
+            pixelStream.Seek(0,System.IO.SeekOrigin.Begin);
+
+            for(int i = 0;i<noiseTexture.Data.Length;i++) {
+                byte value = (byte)MathF.Floor(noiseTexture.Data[i] * byte.MaxValue);
+                pixelStream.WriteByte(value);
+                pixelStream.WriteByte(value);
+                pixelStream.WriteByte(value);
+                pixelStream.WriteByte(byte.MaxValue);
+            }
+
+            _output.Invalidate();
         }
     }
 }
