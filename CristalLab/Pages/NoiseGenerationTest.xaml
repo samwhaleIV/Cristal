@@ -1,0 +1,35 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Page
+    x:Class="CristalLab.Pages.NoiseGenerationTest"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:local="using:CristalLab.Pages"
+    xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+    xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+    mc:Ignorable="d"
+    NavigationCacheMode="Required">
+
+    <Grid Margin="24">
+        <Grid.ColumnDefinitions>
+            <ColumnDefinition Width="Auto" />
+            <ColumnDefinition/>
+        </Grid.ColumnDefinitions>
+        <StackPanel Margin="0,0,24,0" Grid.Column="0" Grid.ColumnSpan="1" Spacing="16" HorizontalAlignment="Left" Width="300" MaxWidth="300">
+
+            <TextBlock Text="Noise Generation Test" Style="{ThemeResource TitleTextBlockStyle}"/>
+
+            <Slider Header="Resolution" Minimum="0" Maximum="100" TickFrequency="10" StepFrequency="10" SnapsTo="Ticks"></Slider>
+
+            <Slider Header="Scale" Minimum="0" Maximum="100"></Slider>
+
+            <TextBlock TextWrapping="Wrap" Style="{ThemeResource BodyTextBlockStyle}">
+                <Run Text="256x256" />
+                <Run Text="@" />
+                <Run Text="1.0" />
+            </TextBlock>
+            <Button Content="Generate" Style="{StaticResource AccentButtonStyle}" HorizontalAlignment="Stretch"/>
+
+        </StackPanel>
+        <Grid Grid.Column="1" Grid.ColumnSpan="1" Background="Red"></Grid>
+    </Grid>
+</Page>

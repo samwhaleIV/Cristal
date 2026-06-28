@@ -1,7 +1,9 @@
 <Solution>
   <Project Path="Cristal/Cristal.csproj" />
-  <Project Path="CristalDesigner/CristalDesigner.csproj" Id="307de50f-853b-46cd-9605-4baa3690bfac" />
+  <Project Path="CristalLab/CristalLab.csproj" Id="acb7047f-5077-4207-9ae9-377950b144a7">
+    <Platform Project="x64" />
+    <Deploy />
+  </Project>
   <Project Path="CristalSandbox/CristalSandbox.csproj" />
-  <Project Path="CristalTest/CristalTest.csproj" />
   <Project Path="MonoCristal/MonoCristal.csproj" />
 </Solution>

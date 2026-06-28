@@ -1,0 +1,29 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Window
+    x:Class="CristalLab.MainWindow"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:local="using:CristalLab"
+    xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+    xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+    mc:Ignorable="d"
+    Title="CristalLab">
+
+    <Window.SystemBackdrop>
+        <MicaBackdrop />
+    </Window.SystemBackdrop>
+    <TabView
+        x:Name="RootTabView"
+        Background="Transparent"
+        VerticalAlignment="Stretch"
+        HorizontalAlignment="Stretch"
+        AddTabButtonClick="RootTabView_AddTabButtonClick"
+        TabCloseRequested="RootTabView_TabCloseRequested"
+        Loaded="RootTabView_Loaded"
+        CanReorderTabs="True"
+        IsAddTabButtonVisible="True"
+        Padding="0,8,0,0"
+        Margin="0">
+    </TabView>
+
+</Window>

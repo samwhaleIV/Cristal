@@ -1,0 +1,10 @@
+{
+  "profiles": {
+    "CristalLab (Package)": {
+      "commandName": "MsixPackage"
+    },
+    "CristalLab (Unpackaged)": {
+      "commandName": "Project"
+    }
+  }
+}
