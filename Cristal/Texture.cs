@@ -4,7 +4,7 @@ using System.Runtime.InteropServices;
 
 namespace Cristal {
 
-    public ref struct Texture<T>:IDisposable where T:struct {
+    public struct Texture<T>:IDisposable where T:struct {
 
         public readonly TextureSize Size { get; }
         private readonly int ArrayLength { get; }

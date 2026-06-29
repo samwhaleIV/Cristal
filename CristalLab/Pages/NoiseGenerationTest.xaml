@@ -8,12 +8,8 @@
     xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
     xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
     mc:Ignorable="d"
-    NavigationCacheMode="Required">
-
-    <cristallab:WorkspacePage.Resources>
-        <local:ResolutionStringFormatter x:Key="ResolutionConverter" />
-        <local:ScaleStringFormatter x:Key="ScaleConverter" />
-    </cristallab:WorkspacePage.Resources>
+    NavigationCacheMode="Required"
+    Loaded="WorkspacePage_Loaded">
 
     <Grid Margin="12" CornerRadius="4">
         <Grid.ColumnDefinitions>
@@ -39,20 +35,9 @@
                 Style="{ThemeResource TitleTextBlockStyle}"
             />
             <TextBlock
-                Text="Generate a texture using the OpenSimplex2S procedural noise algorithm. Choose an output resolution and a scale (zoom level)."
+                Text="Generate a texture using the OpenSimplex2S procedural noise algorithm."
                 Style="{ThemeResource BodyTextBlockStyle}"
             />
-
-            <Slider
-                x:Name="ResolutionSlider"
-                Header="Texture Resolution"
-                Minimum="2"
-                Maximum="12"
-                Value="8"
-                SmallChange="1"
-                TickFrequency="1"
-                StepFrequency="1"
-                SnapsTo="Ticks"/>
 
             <Slider
                 x:Name="ScaleSlider"
@@ -61,7 +46,9 @@
                 Value="10.0"
                 SmallChange="0.1"
                 StepFrequency="0.1"
-                Maximum="100.0"/>
+                Maximum="100.0"
+                ValueChanged="ScaleSlider_ValueChanged"
+                />
 
             <TextBlock
                 Text="Island mode activates post processing that forms celluloid patterns by resampling linear gradients."
@@ -73,12 +60,12 @@
                     <RowDefinition></RowDefinition>
                     <RowDefinition></RowDefinition>
                 </Grid.RowDefinitions>
-                
+
                 <Grid.ColumnDefinitions>
                     <ColumnDefinition/>
                     <ColumnDefinition/>
                 </Grid.ColumnDefinitions>
-                
+
                 <ToggleSwitch
                     x:Name="IslandToggleSwitch"
                     Grid.Column="0"
@@ -87,8 +74,10 @@
                     OffContent="Island Mode"
                     OnContent="Island Mode"
                     IsOn="False"
-                    HorizontalAlignment="Center"/>
-                
+                    HorizontalAlignment="Center"
+                    Toggled="IslandToggleSwitch_Toggled"
+                    />
+
                 <Slider
                     x:Name="IslandPivotSlider"
                     Header="Pivot"
@@ -101,8 +90,10 @@
                     StepFrequency="0.05"
                     Maximum="0.95"
                     HorizontalAlignment="Stretch"
-                    Margin="0,0,8,0"/>
-                
+                    Margin="0,0,8,0"
+                    ValueChanged="IslandPivotSlider_ValueChanged"
+                    />
+
                 <Slider
                     x:Name="IslandRolloffSlider"
                     Header="Softness"
@@ -115,31 +106,10 @@
                     StepFrequency="0.01"
                     Maximum="0.5"
                     HorizontalAlignment="Stretch"
-                    Margin="8,0,0,0"/>
+                    Margin="8,0,0,0"
+                    ValueChanged="IslandRolloffSlider_ValueChanged"
+                    />
             </Grid>
-
-            <TextBlock
-                TextWrapping="Wrap" Style="{ThemeResource BodyTextBlockStyle}">
-                <Run
-                    Text="Resolution: "/>
-                <Run
-                    FontWeight="SemiBold"
-                    Text="{x:Bind ResolutionSlider.Value, Converter={StaticResource ResolutionConverter}, Mode=OneWay}"/>
-                <Run
-                    Text=" Scale: " />
-                <Run
-                    FontWeight="SemiBold"
-                    Text="{x:Bind ScaleSlider.Value, Converter={StaticResource ScaleConverter}, Mode=OneWay}"/>
-            </TextBlock>
-
-            <Button
-                Style="{StaticResource AccentButtonStyle}"
-                
-                Content="Regenerate"
-                Padding="12"
-                HorizontalAlignment="Stretch"
-                Click="Button_Click"
-            />
 
         </StackPanel>
         <Grid

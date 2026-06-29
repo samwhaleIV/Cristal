@@ -65,5 +65,33 @@ namespace Cristal {
 
             return texture;
         }
+
+        public async Task<Texture<float>> CreateNoiseTextureAsync(TextureSize textureSize,float scale,CancellationToken token,long? seed = null) {
+
+            Texture<float> texture = new(textureSize,_arrayPool);
+            Span<float> data = texture.Data;
+
+            long noiseSeed = seed ?? _random.NextInt64();
+
+            // Noise scales vertically with 'size.Height'
+            double pixelScale = 1.0 / (textureSize.Height - 1) * scale;
+
+            for(int y = 0;y < textureSize.Height;y++) {
+
+                token.ThrowIfCancellationRequested();
+
+                for(int x = 0;x < textureSize.Width;x++) {
+                    float value = OpenSimplex2S.Noise2_ImproveX(noiseSeed,x * pixelScale,y * pixelScale);
+
+                    // Value is in range '-1.0' to '1.0', apply basic formula to align to '0.0' to '1.0.
+                    value = (value + 1f) * 0.5f;
+
+                    int index = y * textureSize.Width + x;
+                    data[index] = value;
+                }
+            }
+
+            return texture;
+        }
     }
 }
