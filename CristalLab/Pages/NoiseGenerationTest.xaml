@@ -41,12 +41,12 @@
 
             <Slider
                 x:Name="ScaleSlider"
-                Header="Noise Scale"
-                Minimum="0.1"
+                Header="Scale"
+                Minimum="1.0"
                 Value="10.0"
                 SmallChange="0.1"
                 StepFrequency="0.1"
-                Maximum="100.0"
+                Maximum="48.0"
                 ValueChanged="ScaleSlider_ValueChanged"
                 />
 

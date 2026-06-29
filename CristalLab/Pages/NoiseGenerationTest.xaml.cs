@@ -28,10 +28,13 @@ namespace CristalLab.Pages {
             InitializeComponent();
         }
 
-        private void WorkspacePage_Loaded(object sender,RoutedEventArgs e) {
-            Regenerate();
-        }
+        
 
+        private void WorkspacePage_Loaded(object sender,RoutedEventArgs e) {
+            if(_fullOutput is null) {
+                Regenerate();
+            }
+        }
 
         private void PushTextureToBitmap(Texture<float> texture,WriteableBitmap bitmap) {
             using var pixelStream = bitmap.PixelBuffer.AsStream();
