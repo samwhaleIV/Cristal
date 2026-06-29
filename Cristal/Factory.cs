@@ -41,18 +41,19 @@ namespace Cristal {
             _random = new Random(seed);
         }
 
-        public Texture<float> CreateNoiseTexture(TextureSize textureSize,float scale) {
+        public Texture<float> CreateNoiseTexture(TextureSize textureSize,float scale,long? seed = null) {
 
             Texture<float> texture = new(textureSize,_arrayPool);
             Span<float> data = texture.Data;
-            long seed = _random.NextInt64();
+
+            long noiseSeed = seed ?? _random.NextInt64();
 
             // Noise scales vertically with 'size.Height'
             double pixelScale = 1.0 / (textureSize.Height - 1) * scale;
 
             for(int y = 0; y < textureSize.Height; y++) {
                 for(int x = 0; x < textureSize.Width; x++) {
-                    float value = OpenSimplex2S.Noise2_ImproveX(seed,x * pixelScale,y * pixelScale);
+                    float value = OpenSimplex2S.Noise2_ImproveX(noiseSeed,x * pixelScale,y * pixelScale);
 
                     // Value is in range '-1.0' to '1.0', apply basic formula to align to '0.0' to '1.0.
                     value = (value + 1f) * 0.5f;

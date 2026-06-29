@@ -20,28 +20,142 @@
             <ColumnDefinition Width="Auto" />
             <ColumnDefinition/>
         </Grid.ColumnDefinitions>
-        <StackPanel BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}" BorderThickness="1" Padding="24" CornerRadius="4" Background="{ThemeResource CardBackgroundFillColorDefaultBrush}" Margin="0,0,12,0" Grid.Column="0" Grid.ColumnSpan="1" Spacing="16" VerticalAlignment="Top" HorizontalAlignment="Left" Width="360">
+        <StackPanel
+            BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}"
+            BorderThickness="1"
+            Padding="24"
+            CornerRadius="4"
+            Background="{ThemeResource CardBackgroundFillColorDefaultBrush}"
+            Margin="0,0,12,0"
+            Grid.Column="0"
+            Grid.ColumnSpan="1"
+            Spacing="16"
+            VerticalAlignment="Top"
+            HorizontalAlignment="Left"
+            Width="360">
 
-            <TextBlock Text="Noise Generation" Style="{ThemeResource TitleTextBlockStyle}"/>
-            <TextBlock Text="Generate a texture using the OpenSimplex2S procedural noise algorithm. Choose an output resolution and a scale (zoom level)." Style="{ThemeResource BodyTextBlockStyle}"/>
+            <TextBlock
+                Text="Noise Generation"
+                Style="{ThemeResource TitleTextBlockStyle}"
+            />
+            <TextBlock
+                Text="Generate a texture using the OpenSimplex2S procedural noise algorithm. Choose an output resolution and a scale (zoom level)."
+                Style="{ThemeResource BodyTextBlockStyle}"
+            />
 
-            <Slider x:Name="ResolutionSlider" Header="Texture resolution:" Minimum="2" Maximum="12" Value="8" SmallChange="1" TickFrequency="1" StepFrequency="1" SnapsTo="Ticks"/>
+            <Slider
+                x:Name="ResolutionSlider"
+                Header="Texture Resolution"
+                Minimum="2"
+                Maximum="12"
+                Value="8"
+                SmallChange="1"
+                TickFrequency="1"
+                StepFrequency="1"
+                SnapsTo="Ticks"/>
 
-            <Slider x:Name="ScaleSlider" Header="Noise scale:" Minimum="0.1" Value="10.0" SmallChange="0.1" StepFrequency="0.1" Maximum="100.0"/>
+            <Slider
+                x:Name="ScaleSlider"
+                Header="Noise Scale"
+                Minimum="0.1"
+                Value="10.0"
+                SmallChange="0.1"
+                StepFrequency="0.1"
+                Maximum="100.0"/>
 
-            <TextBlock TextWrapping="Wrap" Style="{ThemeResource BodyTextBlockStyle}">
-                <Run Text="Resolution: "/>
-                <Run FontWeight="SemiBold" Text="{x:Bind ResolutionSlider.Value, Converter={StaticResource ResolutionConverter}, Mode=OneWay}"/>
-                <Run Text=" Scale: " />
-                <Run FontWeight="SemiBold" Text="{x:Bind ScaleSlider.Value, Converter={StaticResource ScaleConverter}, Mode=OneWay}"/>
+            <TextBlock
+                Text="Island mode activates post processing that forms celluloid patterns by resampling linear gradients."
+                Style="{ThemeResource BodyTextBlockStyle}"
+            />
+            <Grid >
+
+                <Grid.RowDefinitions>
+                    <RowDefinition></RowDefinition>
+                    <RowDefinition></RowDefinition>
+                </Grid.RowDefinitions>
+                
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition/>
+                    <ColumnDefinition/>
+                </Grid.ColumnDefinitions>
+                
+                <ToggleSwitch
+                    x:Name="IslandToggleSwitch"
+                    Grid.Column="0"
+                    Grid.ColumnSpan="2"
+                    Grid.Row="0"
+                    OffContent="Island Mode"
+                    OnContent="Island Mode"
+                    IsOn="False"
+                    HorizontalAlignment="Center"/>
+                
+                <Slider
+                    x:Name="IslandPivotSlider"
+                    Header="Pivot"
+                    Grid.Column="0"
+                    Grid.Row="1"
+                    IsEnabled="{x:Bind IslandToggleSwitch.IsOn, Mode=OneWay}"
+                    Minimum="0.05"
+                    Value="0.5"
+                    SmallChange="0.05"
+                    StepFrequency="0.05"
+                    Maximum="0.95"
+                    HorizontalAlignment="Stretch"
+                    Margin="0,0,8,0"/>
+                
+                <Slider
+                    x:Name="IslandRolloffSlider"
+                    Header="Softness"
+                    Grid.Column="1"
+                    Grid.Row="1"
+                    IsEnabled="{x:Bind IslandToggleSwitch.IsOn, Mode=OneWay}"
+                    Minimum="0.01"
+                    Value="0.05"
+                    SmallChange="0.01"
+                    StepFrequency="0.01"
+                    Maximum="0.5"
+                    HorizontalAlignment="Stretch"
+                    Margin="8,0,0,0"/>
+            </Grid>
+
+            <TextBlock
+                TextWrapping="Wrap" Style="{ThemeResource BodyTextBlockStyle}">
+                <Run
+                    Text="Resolution: "/>
+                <Run
+                    FontWeight="SemiBold"
+                    Text="{x:Bind ResolutionSlider.Value, Converter={StaticResource ResolutionConverter}, Mode=OneWay}"/>
+                <Run
+                    Text=" Scale: " />
+                <Run
+                    FontWeight="SemiBold"
+                    Text="{x:Bind ScaleSlider.Value, Converter={StaticResource ScaleConverter}, Mode=OneWay}"/>
             </TextBlock>
 
-            <Button Padding="12" Content="Generate New Texture" Style="{StaticResource AccentButtonStyle}" HorizontalAlignment="Stretch" Click="Button_Click"/>
+            <Button
+                Style="{StaticResource AccentButtonStyle}"
+                
+                Content="Regenerate"
+                Padding="12"
+                HorizontalAlignment="Stretch"
+                Click="Button_Click"
+            />
 
         </StackPanel>
-        <Grid Grid.Column="1" Grid.ColumnSpan="1" BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}" BorderThickness="1" Background="Black" CornerRadius="4" Padding="12" Margin="0">
-
-            <Image x:Name="BitmapContainer" Stretch="Uniform" HorizontalAlignment="Stretch" VerticalAlignment="Stretch"/>
+        <Grid
+            Background="{ThemeResource CardBackgroundFillColorDefaultBrush}"
+            Grid.Column="1"
+            Grid.ColumnSpan="1"
+            BorderThickness="1"
+            BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}"
+            CornerRadius="4"
+            Padding="12"
+            Margin="0">
+            <Image
+                x:Name="BitmapContainer"
+                Stretch="Uniform"
+                HorizontalAlignment="Stretch"
+                VerticalAlignment="Stretch"/>
         </Grid>
     </Grid>
 </cristallab:WorkspacePage>
