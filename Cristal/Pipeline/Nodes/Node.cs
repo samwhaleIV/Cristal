@@ -13,10 +13,10 @@
             return new Node<TParentIn,TSelfOut,TNextOut,Node<TParentIn,TParentOut,TSelfOut,TParent,TFilter>,TNextFilter>(this,nextFilter);
         }
 
-        public Node<TParentIn,TSelfOut,TNextOut,Node<TParentIn,TParentOut,TSelfOut,TParent,TFilter>,TNextProcessor> Append<TNextOut,TNextProcessor>()
-            where TNextProcessor : IFilter<TSelfOut,TNextOut>, new()
+        public Node<TParentIn,TSelfOut,TNextOut,Node<TParentIn,TParentOut,TSelfOut,TParent,TFilter>,INextFilter> Append<TNextOut,INextFilter>()
+            where INextFilter : IFilter<TSelfOut,TNextOut>, new()
         {
-            return new Node<TParentIn,TSelfOut,TNextOut,Node<TParentIn,TParentOut,TSelfOut,TParent,TFilter>,TNextProcessor>(this,new TNextProcessor());
+            return new Node<TParentIn,TSelfOut,TNextOut,Node<TParentIn,TParentOut,TSelfOut,TParent,TFilter>,INextFilter>(this,new INextFilter());
         }
 
         public Node<TParentIn,TSelfOut,TSelfOut,Node<TParentIn,TParentOut,TSelfOut,TParent,TFilter>,OptionalNode<TSelfOut,TNextFilter>> AppendOptional<TNextFilter>(TNextFilter nextFilter,bool enabled)

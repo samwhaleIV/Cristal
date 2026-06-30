@@ -46,8 +46,8 @@ namespace Cristal {
 
             var scale = 1.0f / config.Size.Height * config.Scale;
 
-            var pipeline = PipelineFactory.CreatePipeline<Point,float,Noise>(new Noise(config.Seed ?? _random.NextInt64(),scale))
-                .AppendOptional(new IslandFilter(config.IslandFilterConfig.GetValueOrDefault()),config.IslandFilterConfig.HasValue)
+            var pipeline = PipelineFactory.CreatePipeline<Point,float,Noise>(new(config.Seed ?? _random.NextInt64(),scale))
+                .AppendOptional<IslandFilter>(new(config.IslandFilterConfig.GetValueOrDefault()),config.IslandFilterConfig.HasValue)
                 .Append<float,ToSRGB>()
                 .Append<byte,FloatToByte>();
 
