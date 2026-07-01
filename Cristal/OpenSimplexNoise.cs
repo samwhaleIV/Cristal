@@ -1,391 +1,730 @@
-﻿/* OpenSimplex Noise in C#
- * Ported from https://gist.github.com/KdotJPG/b1270127455a94ac5d19
- * and heavily refactored to improve performance. */
+﻿/*
+ * Public Domain/Unlicense from https://github.com/KdotJPG/OpenSimplex2/blob/master/csharp/OpenSimplex2.cs
+ * Modifications made as needed.
+ */
 
 using System.Runtime.CompilerServices;
 
 namespace Cristal {
-    public class OpenSimplexNoise {
-        private const double STRETCH_2D = -0.211324865405187;    //(1/Math.sqrt(2+1)-1)/2;
-        private const double STRETCH_3D = -1.0 / 6.0;            //(1/Math.sqrt(3+1)-1)/3;
-        private const double STRETCH_4D = -0.138196601125011;    //(1/Math.sqrt(4+1)-1)/4;
-        private const double SQUISH_2D = 0.366025403784439;      //(Math.sqrt(2+1)-1)/2;
-        private const double SQUISH_3D = 1.0 / 3.0;              //(Math.sqrt(3+1)-1)/3;
-        private const double SQUISH_4D = 0.309016994374947;      //(Math.sqrt(4+1)-1)/4;
-        private const double NORM_2D = 1.0 / 47.0;
-        private const double NORM_3D = 1.0 / 103.0;
-        private const double NORM_4D = 1.0 / 30.0;
+    public static class OpenSimplex2 {
+        private const long PRIME_X = 0x5205402B9270C86FL;
+        private const long PRIME_Y = 0x598CD327003817B5L;
+        private const long PRIME_Z = 0x5BCC226E9FA0BACBL;
+        private const long PRIME_W = 0x56CC5227E58F554BL;
+        private const long HASH_MULTIPLIER = 0x53A3F72DEEC546F5L;
+        private const long SEED_FLIP_3D = -0x52D547B2E96ED629L;
+        private const long SEED_OFFSET_4D = 0xE83DC3E0DA7164DL;
 
-        private readonly byte[] perm;
-        private readonly byte[] perm2D;
-        private readonly byte[] perm3D;
-        private readonly byte[] perm4D;
+        private const double ROOT2OVER2 = 0.7071067811865476;
+        private const double SKEW_2D = 0.366025403784439;
+        private const double UNSKEW_2D = -0.21132486540518713;
 
-        private readonly static double[] gradients2D = [
-             5,  2,    2,  5,
-            -5,  2,   -2,  5,
-             5, -2,    2, -5,
-            -5, -2,   -2, -5,
-        ];
+        private const double ROOT3OVER3 = 0.577350269189626;
+        private const double FALLBACK_ROTATE_3D = 2.0 / 3.0;
+        private const double ROTATE_3D_ORTHOGONALIZER = UNSKEW_2D;
 
-        private readonly static double[] gradients3D = [
-            -11,  4,  4,     -4,  11,  4,    -4,  4,  11,
-             11,  4,  4,      4,  11,  4,     4,  4,  11,
-            -11, -4,  4,     -4, -11,  4,    -4, -4,  11,
-             11, -4,  4,      4, -11,  4,     4, -4,  11,
-            -11,  4, -4,     -4,  11, -4,    -4,  4, -11,
-             11,  4, -4,      4,  11, -4,     4,  4, -11,
-            -11, -4, -4,     -4, -11, -4,    -4, -4, -11,
-             11, -4, -4,      4, -11, -4,     4, -4, -11,
-        ];
+        private const float SKEW_4D = -0.138196601125011f;
+        private const float UNSKEW_4D = 0.309016994374947f;
+        private const float LATTICE_STEP_4D = 0.2f;
 
-        private readonly static double[] gradients4D = [
-             3,  1,  1,  1,      1,  3,  1,  1,      1,  1,  3,  1,      1,  1,  1,  3,
-            -3,  1,  1,  1,     -1,  3,  1,  1,     -1,  1,  3,  1,     -1,  1,  1,  3,
-             3, -1,  1,  1,      1, -3,  1,  1,      1, -1,  3,  1,      1, -1,  1,  3,
-            -3, -1,  1,  1,     -1, -3,  1,  1,     -1, -1,  3,  1,     -1, -1,  1,  3,
-             3,  1, -1,  1,      1,  3, -1,  1,      1,  1, -3,  1,      1,  1, -1,  3,
-            -3,  1, -1,  1,     -1,  3, -1,  1,     -1,  1, -3,  1,     -1,  1, -1,  3,
-             3, -1, -1,  1,      1, -3, -1,  1,      1, -1, -3,  1,      1, -1, -1,  3,
-            -3, -1, -1,  1,     -1, -3, -1,  1,     -1, -1, -3,  1,     -1, -1, -1,  3,
-             3,  1,  1, -1,      1,  3,  1, -1,      1,  1,  3, -1,      1,  1,  1, -3,
-            -3,  1,  1, -1,     -1,  3,  1, -1,     -1,  1,  3, -1,     -1,  1,  1, -3,
-             3, -1,  1, -1,      1, -3,  1, -1,      1, -1,  3, -1,      1, -1,  1, -3,
-            -3, -1,  1, -1,     -1, -3,  1, -1,     -1, -1,  3, -1,     -1, -1,  1, -3,
-             3,  1, -1, -1,      1,  3, -1, -1,      1,  1, -3, -1,      1,  1, -1, -3,
-            -3,  1, -1, -1,     -1,  3, -1, -1,     -1,  1, -3, -1,     -1,  1, -1, -3,
-             3, -1, -1, -1,      1, -3, -1, -1,      1, -1, -3, -1,      1, -1, -1, -3,
-            -3, -1, -1, -1,     -1, -3, -1, -1,     -1, -1, -3, -1,     -1, -1, -1, -3,
-        ];
+        private const int N_GRADS_2D_EXPONENT = 7;
+        private const int N_GRADS_3D_EXPONENT = 8;
+        private const int N_GRADS_4D_EXPONENT = 9;
+        private const int N_GRADS_2D = 1 << N_GRADS_2D_EXPONENT;
+        private const int N_GRADS_3D = 1 << N_GRADS_3D_EXPONENT;
+        private const int N_GRADS_4D = 1 << N_GRADS_4D_EXPONENT;
 
-        private readonly static Contribution2[] lookup2D;
-        private readonly static Contribution3[] lookup3D;
-        private readonly static Contribution4[] lookup4D;
+        private const double NORMALIZER_2D = 0.01001634121365712;
+        private const double NORMALIZER_3D = 0.07969837668935331;
+        private const double NORMALIZER_4D = 0.0220065933241897;
 
-        static OpenSimplexNoise() {
-            var base2D = new int[][] {
-                [1, 1, 0, 1, 0, 1, 0, 0, 0],
-                [1, 1, 0, 1, 0, 1, 2, 1, 1]
-            };
-            var p2D = new int[] { 0,0,1,-1,0,0,-1,1,0,2,1,1,1,2,2,0,1,2,0,2,1,0,0,0 };
-            var lookupPairs2D = new int[] { 0,1,1,0,4,1,17,0,20,2,21,2,22,5,23,5,26,4,39,3,42,4,43,3 };
+        private const float RSQUARED_2D = 0.5f;
+        private const float RSQUARED_3D = 0.6f;
+        private const float RSQUARED_4D = 0.6f;
 
-            var contributions2D = new Contribution2[p2D.Length / 4];
-            for(int i = 0;i < p2D.Length;i += 4) {
-                var baseSet = base2D[p2D[i]];
-                Contribution2? previous = null, current = null;
-                for(int k = 0;k < baseSet.Length;k += 3) {
-                    current = new Contribution2(baseSet[k],baseSet[k + 1],baseSet[k + 2]);
-                    if(previous == null) {
-                        contributions2D[i / 4] = current;
-                    } else {
-                        previous.Next = current;
-                    }
-                    previous = current;
+
+        /*
+         * Noise Evaluators
+         */
+
+        /**
+         * 2D Simplex noise, standard lattice orientation.
+         */
+        public static float Noise2(long seed,double x,double y) {
+            // Get points for A2* lattice
+            double s = SKEW_2D * (x + y);
+            double xs = x + s, ys = y + s;
+
+            return Noise2_UnskewedBase(seed,xs,ys);
+        }
+
+        /**
+         * 2D Simplex noise, with Y pointing down the main diagonal.
+         * Might be better for a 2D sandbox style game, where Y is vertical.
+         * Probably slightly less optimal for heightmaps or continent maps,
+         * unless your map is centered around an equator. It's a subtle
+         * difference, but the option is here to make it an easy choice.
+         */
+        public static float Noise2_ImproveX(long seed,double x,double y) {
+            // Skew transform and rotation baked into one.
+            double xx = x * ROOT2OVER2;
+            double yy = y * (ROOT2OVER2 * (1 + 2 * SKEW_2D));
+
+            return Noise2_UnskewedBase(seed,yy + xx,yy - xx);
+        }
+
+        /**
+         * 2D Simplex noise base.
+         */
+        private static float Noise2_UnskewedBase(long seed,double xs,double ys) {
+            // Get base points and offsets.
+            int xsb = FastFloor(xs), ysb = FastFloor(ys);
+            float xi = (float)(xs - xsb), yi = (float)(ys - ysb);
+
+            // Prime pre-multiplication for hash.
+            long xsbp = xsb * PRIME_X, ysbp = ysb * PRIME_Y;
+
+            // Unskew.
+            float t = (xi + yi) * (float)UNSKEW_2D;
+            float dx0 = xi + t, dy0 = yi + t;
+
+            // First vertex.
+            float value = 0;
+            float a0 = RSQUARED_2D - dx0 * dx0 - dy0 * dy0;
+            if(a0 > 0) {
+                value = (a0 * a0) * (a0 * a0) * Grad(seed,xsbp,ysbp,dx0,dy0);
+            }
+
+            // Second vertex.
+            float a1 = (float)(2 * (1 + 2 * UNSKEW_2D) * (1 / UNSKEW_2D + 2)) * t + ((float)(-2 * (1 + 2 * UNSKEW_2D) * (1 + 2 * UNSKEW_2D)) + a0);
+            if(a1 > 0) {
+                float dx1 = dx0 - (float)(1 + 2 * UNSKEW_2D);
+                float dy1 = dy0 - (float)(1 + 2 * UNSKEW_2D);
+                value += (a1 * a1) * (a1 * a1) * Grad(seed,xsbp + PRIME_X,ysbp + PRIME_Y,dx1,dy1);
+            }
+
+            // Third vertex.
+            if(dy0 > dx0) {
+                float dx2 = dx0 - (float)UNSKEW_2D;
+                float dy2 = dy0 - (float)(UNSKEW_2D + 1);
+                float a2 = RSQUARED_2D - dx2 * dx2 - dy2 * dy2;
+                if(a2 > 0) {
+                    value += (a2 * a2) * (a2 * a2) * Grad(seed,xsbp,ysbp + PRIME_Y,dx2,dy2);
                 }
-                current?.Next = new Contribution2(p2D[i + 1],p2D[i + 2],p2D[i + 3]);
-            }
-
-            lookup2D = new Contribution2[64];
-            for(var i = 0;i < lookupPairs2D.Length;i += 2) {
-                lookup2D[lookupPairs2D[i]] = contributions2D[lookupPairs2D[i + 1]];
-            }
-
-
-            var base3D = new int[][] {
-                [0, 0, 0, 0, 1, 1, 0, 0, 1, 0, 1, 0, 1, 0, 0, 1],
-                [2, 1, 1, 0, 2, 1, 0, 1, 2, 0, 1, 1, 3, 1, 1, 1],
-                [1, 1, 0, 0, 1, 0, 1, 0, 1, 0, 0, 1, 2, 1, 1, 0, 2, 1, 0, 1, 2, 0, 1, 1]
-            };
-            var p3D = new int[] { 0,0,1,-1,0,0,1,0,-1,0,0,-1,1,0,0,0,1,-1,0,0,-1,0,1,0,0,-1,1,0,2,1,1,0,1,1,1,-1,0,2,1,0,1,1,1,-1,1,0,2,0,1,1,1,-1,1,1,1,3,2,1,0,3,1,2,0,1,3,2,0,1,3,1,0,2,1,3,0,2,1,3,0,1,2,1,1,1,0,0,2,2,0,0,1,1,0,1,0,2,0,2,0,1,1,0,0,1,2,0,0,2,2,0,0,0,0,1,1,-1,1,2,0,0,0,0,1,-1,1,1,2,0,0,0,0,1,1,1,-1,2,3,1,1,1,2,0,0,2,2,3,1,1,1,2,2,0,0,2,3,1,1,1,2,0,2,0,2,1,1,-1,1,2,0,0,2,2,1,1,-1,1,2,2,0,0,2,1,-1,1,1,2,0,0,2,2,1,-1,1,1,2,0,2,0,2,1,1,1,-1,2,2,0,0,2,1,1,1,-1,2,0,2,0 };
-            var lookupPairs3D = new int[] { 0,2,1,1,2,2,5,1,6,0,7,0,32,2,34,2,129,1,133,1,160,5,161,5,518,0,519,0,546,4,550,4,645,3,647,3,672,5,673,5,674,4,677,3,678,4,679,3,680,13,681,13,682,12,685,14,686,12,687,14,712,20,714,18,809,21,813,23,840,20,841,21,1198,19,1199,22,1226,18,1230,19,1325,23,1327,22,1352,15,1353,17,1354,15,1357,17,1358,16,1359,16,1360,11,1361,10,1362,11,1365,10,1366,9,1367,9,1392,11,1394,11,1489,10,1493,10,1520,8,1521,8,1878,9,1879,9,1906,7,1910,7,2005,6,2007,6,2032,8,2033,8,2034,7,2037,6,2038,7,2039,6 };
-
-            var contributions3D = new Contribution3[p3D.Length / 9];
-            for(int i = 0;i < p3D.Length;i += 9) {
-                var baseSet = base3D[p3D[i]];
-                Contribution3? previous = null, current = null;
-                for(int k = 0;k < baseSet.Length;k += 4) {
-                    current = new Contribution3(baseSet[k],baseSet[k + 1],baseSet[k + 2],baseSet[k + 3]);
-                    if(previous == null) {
-                        contributions3D[i / 9] = current;
-                    } else {
-                        previous.Next = current;
-                    }
-                    previous = current;
+            } else {
+                float dx2 = dx0 - (float)(UNSKEW_2D + 1);
+                float dy2 = dy0 - (float)UNSKEW_2D;
+                float a2 = RSQUARED_2D - dx2 * dx2 - dy2 * dy2;
+                if(a2 > 0) {
+                    value += (a2 * a2) * (a2 * a2) * Grad(seed,xsbp + PRIME_X,ysbp,dx2,dy2);
                 }
-                current?.Next = new Contribution3(p3D[i + 1],p3D[i + 2],p3D[i + 3],p3D[i + 4]) {
-                    Next = new Contribution3(p3D[i + 5],p3D[i + 6],p3D[i + 7],p3D[i + 8])
-                };
             }
 
-            lookup3D = new Contribution3[2048];
-            for(var i = 0;i < lookupPairs3D.Length;i += 2) {
-                lookup3D[lookupPairs3D[i]] = contributions3D[lookupPairs3D[i + 1]];
-            }
+            return value;
+        }
 
-            var base4D = new int[][]
-            {
-                [0, 0, 0, 0, 0, 1, 1, 0, 0, 0, 1, 0, 1, 0, 0, 1, 0, 0, 1, 0, 1, 0, 0, 0, 1],
-                [3, 1, 1, 1, 0, 3, 1, 1, 0, 1, 3, 1, 0, 1, 1, 3, 0, 1, 1, 1, 4, 1, 1, 1, 1],
-                [1, 1, 0, 0, 0, 1, 0, 1, 0, 0, 1, 0, 0, 1, 0, 1, 0, 0, 0, 1, 2, 1, 1, 0, 0, 2, 1, 0, 1, 0, 2, 1, 0, 0, 1, 2, 0, 1, 1, 0, 2, 0, 1, 0, 1, 2, 0, 0, 1, 1],
-                [3, 1, 1, 1, 0, 3, 1, 1, 0, 1, 3, 1, 0, 1, 1, 3, 0, 1, 1, 1, 2, 1, 1, 0, 0, 2, 1, 0, 1, 0, 2, 1, 0, 0, 1, 2, 0, 1, 1, 0, 2, 0, 1, 0, 1, 2, 0, 0, 1, 1]
-            };
-            var p4D = new int[] { 0,0,1,-1,0,0,0,1,0,-1,0,0,1,0,0,-1,0,0,-1,1,0,0,0,0,1,-1,0,0,0,1,0,-1,0,0,-1,0,1,0,0,0,-1,1,0,0,0,0,1,-1,0,0,-1,0,0,1,0,0,-1,0,1,0,0,0,-1,1,0,2,1,1,0,0,1,1,1,-1,0,1,1,1,0,-1,0,2,1,0,1,0,1,1,-1,1,0,1,1,0,1,-1,0,2,0,1,1,0,1,-1,1,1,0,1,0,1,1,-1,0,2,1,0,0,1,1,1,-1,0,1,1,1,0,-1,1,0,2,0,1,0,1,1,-1,1,0,1,1,0,1,-1,1,0,2,0,0,1,1,1,-1,0,1,1,1,0,-1,1,1,1,4,2,1,1,0,4,1,2,1,0,4,1,1,2,0,1,4,2,1,0,1,4,1,2,0,1,4,1,1,0,2,1,4,2,0,1,1,4,1,0,2,1,4,1,0,1,2,1,4,0,2,1,1,4,0,1,2,1,4,0,1,1,2,1,2,1,1,0,0,3,2,1,0,0,3,1,2,0,0,1,2,1,0,1,0,3,2,0,1,0,3,1,0,2,0,1,2,0,1,1,0,3,0,2,1,0,3,0,1,2,0,1,2,1,0,0,1,3,2,0,0,1,3,1,0,0,2,1,2,0,1,0,1,3,0,2,0,1,3,0,1,0,2,1,2,0,0,1,1,3,0,0,2,1,3,0,0,1,2,2,3,1,1,1,0,2,1,1,1,-1,2,2,0,0,0,2,3,1,1,0,1,2,1,1,-1,1,2,2,0,0,0,2,3,1,0,1,1,2,1,-1,1,1,2,2,0,0,0,2,3,1,1,1,0,2,1,1,1,-1,2,0,2,0,0,2,3,1,1,0,1,2,1,1,-1,1,2,0,2,0,0,2,3,0,1,1,1,2,-1,1,1,1,2,0,2,0,0,2,3,1,1,1,0,2,1,1,1,-1,2,0,0,2,0,2,3,1,0,1,1,2,1,-1,1,1,2,0,0,2,0,2,3,0,1,1,1,2,-1,1,1,1,2,0,0,2,0,2,3,1,1,0,1,2,1,1,-1,1,2,0,0,0,2,2,3,1,0,1,1,2,1,-1,1,1,2,0,0,0,2,2,3,0,1,1,1,2,-1,1,1,1,2,0,0,0,2,2,1,1,1,-1,0,1,1,1,0,-1,0,0,0,0,0,2,1,1,-1,1,0,1,1,0,1,-1,0,0,0,0,0,2,1,-1,1,1,0,1,0,1,1,-1,0,0,0,0,0,2,1,1,-1,0,1,1,1,0,-1,1,0,0,0,0,0,2,1,-1,1,0,1,1,0,1,-1,1,0,0,0,0,0,2,1,-1,0,1,1,1,0,-1,1,1,0,0,0,0,0,2,1,1,1,-1,0,1,1,1,0,-1,2,2,0,0,0,2,1,1,-1,1,0,1,1,0,1,-1,2,2,0,0,0,2,1,1,-1,0,1,1,1,0,-1,1,2,2,0,0,0,2,1,1,1,-1,0,1,1,1,0,-1,2,0,2,0,0,2,1,-1,1,1,0,1,0,1,1,-1,2,0,2,0,0,2,1,-1,1,0,1,1,0,1,-1,1,2,0,2,0,0,2,1,1,-1,1,0,1,1,0,1,-1,2,0,0,2,0,2,1,-1,1,1,0,1,0,1,1,-1,2,0,0,2,0,2,1,-1,0,1,1,1,0,-1,1,1,2,0,0,2,0,2,1,1,-1,0,1,1,1,0,-1,1,2,0,0,0,2,2,1,-1,1,0,1,1,0,1,-1,1,2,0,0,0,2,2,1,-1,0,1,1,1,0,-1,1,1,2,0,0,0,2,3,1,1,0,0,0,2,2,0,0,0,2,1,1,1,-1,3,1,0,1,0,0,2,0,2,0,0,2,1,1,1,-1,3,1,0,0,1,0,2,0,0,2,0,2,1,1,1,-1,3,1,1,0,0,0,2,2,0,0,0,2,1,1,-1,1,3,1,0,1,0,0,2,0,2,0,0,2,1,1,-1,1,3,1,0,0,0,1,2,0,0,0,2,2,1,1,-1,1,3,1,1,0,0,0,2,2,0,0,0,2,1,-1,1,1,3,1,0,0,1,0,2,0,0,2,0,2,1,-1,1,1,3,1,0,0,0,1,2,0,0,0,2,2,1,-1,1,1,3,1,0,1,0,0,2,0,2,0,0,2,-1,1,1,1,3,1,0,0,1,0,2,0,0,2,0,2,-1,1,1,1,3,1,0,0,0,1,2,0,0,0,2,2,-1,1,1,1,3,3,2,1,0,0,3,1,2,0,0,4,1,1,1,1,3,3,2,0,1,0,3,1,0,2,0,4,1,1,1,1,3,3,0,2,1,0,3,0,1,2,0,4,1,1,1,1,3,3,2,0,0,1,3,1,0,0,2,4,1,1,1,1,3,3,0,2,0,1,3,0,1,0,2,4,1,1,1,1,3,3,0,0,2,1,3,0,0,1,2,4,1,1,1,1,3,3,2,1,0,0,3,1,2,0,0,2,1,1,1,-1,3,3,2,0,1,0,3,1,0,2,0,2,1,1,1,-1,3,3,0,2,1,0,3,0,1,2,0,2,1,1,1,-1,3,3,2,1,0,0,3,1,2,0,0,2,1,1,-1,1,3,3,2,0,0,1,3,1,0,0,2,2,1,1,-1,1,3,3,0,2,0,1,3,0,1,0,2,2,1,1,-1,1,3,3,2,0,1,0,3,1,0,2,0,2,1,-1,1,1,3,3,2,0,0,1,3,1,0,0,2,2,1,-1,1,1,3,3,0,0,2,1,3,0,0,1,2,2,1,-1,1,1,3,3,0,2,1,0,3,0,1,2,0,2,-1,1,1,1,3,3,0,2,0,1,3,0,1,0,2,2,-1,1,1,1,3,3,0,0,2,1,3,0,0,1,2,2,-1,1,1,1 };
-            var lookupPairs4D = new int[] { 0,3,1,2,2,3,5,2,6,1,7,1,8,3,9,2,10,3,13,2,16,3,18,3,22,1,23,1,24,3,26,3,33,2,37,2,38,1,39,1,41,2,45,2,54,1,55,1,56,0,57,0,58,0,59,0,60,0,61,0,62,0,63,0,256,3,258,3,264,3,266,3,272,3,274,3,280,3,282,3,2049,2,2053,2,2057,2,2061,2,2081,2,2085,2,2089,2,2093,2,2304,9,2305,9,2312,9,2313,9,16390,1,16391,1,16406,1,16407,1,16422,1,16423,1,16438,1,16439,1,16642,8,16646,8,16658,8,16662,8,18437,6,18439,6,18469,6,18471,6,18688,9,18689,9,18690,8,18693,6,18694,8,18695,6,18696,9,18697,9,18706,8,18710,8,18725,6,18727,6,131128,0,131129,0,131130,0,131131,0,131132,0,131133,0,131134,0,131135,0,131352,7,131354,7,131384,7,131386,7,133161,5,133165,5,133177,5,133181,5,133376,9,133377,9,133384,9,133385,9,133400,7,133402,7,133417,5,133421,5,133432,7,133433,5,133434,7,133437,5,147510,4,147511,4,147518,4,147519,4,147714,8,147718,8,147730,8,147734,8,147736,7,147738,7,147766,4,147767,4,147768,7,147770,7,147774,4,147775,4,149509,6,149511,6,149541,6,149543,6,149545,5,149549,5,149558,4,149559,4,149561,5,149565,5,149566,4,149567,4,149760,9,149761,9,149762,8,149765,6,149766,8,149767,6,149768,9,149769,9,149778,8,149782,8,149784,7,149786,7,149797,6,149799,6,149801,5,149805,5,149814,4,149815,4,149816,7,149817,5,149818,7,149821,5,149822,4,149823,4,149824,37,149825,37,149826,36,149829,34,149830,36,149831,34,149832,37,149833,37,149842,36,149846,36,149848,35,149850,35,149861,34,149863,34,149865,33,149869,33,149878,32,149879,32,149880,35,149881,33,149882,35,149885,33,149886,32,149887,32,150080,49,150082,48,150088,49,150098,48,150104,47,150106,47,151873,46,151877,45,151881,46,151909,45,151913,44,151917,44,152128,49,152129,46,152136,49,152137,46,166214,43,166215,42,166230,43,166247,42,166262,41,166263,41,166466,48,166470,43,166482,48,166486,43,168261,45,168263,42,168293,45,168295,42,168512,31,168513,28,168514,31,168517,28,168518,25,168519,25,280952,40,280953,39,280954,40,280957,39,280958,38,280959,38,281176,47,281178,47,281208,40,281210,40,282985,44,282989,44,283001,39,283005,39,283208,30,283209,27,283224,30,283241,27,283256,22,283257,22,297334,41,297335,41,297342,38,297343,38,297554,29,297558,24,297562,29,297590,24,297594,21,297598,21,299365,26,299367,23,299373,26,299383,23,299389,20,299391,20,299584,31,299585,28,299586,31,299589,28,299590,25,299591,25,299592,30,299593,27,299602,29,299606,24,299608,30,299610,29,299621,26,299623,23,299625,27,299629,26,299638,24,299639,23,299640,22,299641,22,299642,21,299645,20,299646,21,299647,20,299648,61,299649,60,299650,61,299653,60,299654,59,299655,59,299656,58,299657,57,299666,55,299670,54,299672,58,299674,55,299685,52,299687,51,299689,57,299693,52,299702,54,299703,51,299704,56,299705,56,299706,53,299709,50,299710,53,299711,50,299904,61,299906,61,299912,58,299922,55,299928,58,299930,55,301697,60,301701,60,301705,57,301733,52,301737,57,301741,52,301952,79,301953,79,301960,76,301961,76,316038,59,316039,59,316054,54,316071,51,316086,54,316087,51,316290,78,316294,78,316306,73,316310,73,318085,77,318087,77,318117,70,318119,70,318336,79,318337,79,318338,78,318341,77,318342,78,318343,77,430776,56,430777,56,430778,53,430781,50,430782,53,430783,50,431000,75,431002,72,431032,75,431034,72,432809,74,432813,69,432825,74,432829,69,433032,76,433033,76,433048,75,433065,74,433080,75,433081,74,447158,71,447159,68,447166,71,447167,68,447378,73,447382,73,447386,72,447414,71,447418,72,447422,71,449189,70,449191,70,449197,69,449207,68,449213,69,449215,68,449408,67,449409,67,449410,66,449413,64,449414,66,449415,64,449416,67,449417,67,449426,66,449430,66,449432,65,449434,65,449445,64,449447,64,449449,63,449453,63,449462,62,449463,62,449464,65,449465,63,449466,65,449469,63,449470,62,449471,62,449472,19,449473,19,449474,18,449477,16,449478,18,449479,16,449480,19,449481,19,449490,18,449494,18,449496,17,449498,17,449509,16,449511,16,449513,15,449517,15,449526,14,449527,14,449528,17,449529,15,449530,17,449533,15,449534,14,449535,14,449728,19,449729,19,449730,18,449734,18,449736,19,449737,19,449746,18,449750,18,449752,17,449754,17,449784,17,449786,17,451520,19,451521,19,451525,16,451527,16,451528,19,451529,19,451557,16,451559,16,451561,15,451565,15,451577,15,451581,15,451776,19,451777,19,451784,19,451785,19,465858,18,465861,16,465862,18,465863,16,465874,18,465878,18,465893,16,465895,16,465910,14,465911,14,465918,14,465919,14,466114,18,466118,18,466130,18,466134,18,467909,16,467911,16,467941,16,467943,16,468160,13,468161,13,468162,13,468163,13,468164,13,468165,13,468166,13,468167,13,580568,17,580570,17,580585,15,580589,15,580598,14,580599,14,580600,17,580601,15,580602,17,580605,15,580606,14,580607,14,580824,17,580826,17,580856,17,580858,17,582633,15,582637,15,582649,15,582653,15,582856,12,582857,12,582872,12,582873,12,582888,12,582889,12,582904,12,582905,12,596982,14,596983,14,596990,14,596991,14,597202,11,597206,11,597210,11,597214,11,597234,11,597238,11,597242,11,597246,11,599013,10,599015,10,599021,10,599023,10,599029,10,599031,10,599037,10,599039,10,599232,13,599233,13,599234,13,599235,13,599236,13,599237,13,599238,13,599239,13,599240,12,599241,12,599250,11,599254,11,599256,12,599257,12,599258,11,599262,11,599269,10,599271,10,599272,12,599273,12,599277,10,599279,10,599282,11,599285,10,599286,11,599287,10,599288,12,599289,12,599290,11,599293,10,599294,11,599295,10 };
-            var contributions4D = new Contribution4[p4D.Length / 16];
-            for(int i = 0;i < p4D.Length;i += 16) {
-                var baseSet = base4D[p4D[i]];
-                Contribution4? previous = null, current = null;
-                for(int k = 0;k < baseSet.Length;k += 5) {
-                    current = new Contribution4(baseSet[k],baseSet[k + 1],baseSet[k + 2],baseSet[k + 3],baseSet[k + 4]);
-                    if(previous == null) {
-                        contributions4D[i / 16] = current;
-                    } else {
-                        previous.Next = current;
-                    }
-                    previous = current;
+        /**
+         * 3D OpenSimplex2 noise, with better visual isotropy in (X, Y).
+         * Recommended for 3D terrain and time-varied animations.
+         * The Z coordinate should always be the "different" coordinate in whatever your use case is.
+         * If Y is vertical in world coordinates, call Noise3_ImproveXZ(x, z, Y) or use noise3_XZBeforeY.
+         * If Z is vertical in world coordinates, call Noise3_ImproveXZ(x, y, Z).
+         * For a time varied animation, call Noise3_ImproveXY(x, y, T).
+         */
+        public static float Noise3_ImproveXY(long seed,double x,double y,double z) {
+            // Re-orient the cubic lattices without skewing, so Z points up the main lattice diagonal,
+            // and the planes formed by XY are moved far out of alignment with the cube faces.
+            // Orthonormal rotation. Not a skew transform.
+            double xy = x + y;
+            double s2 = xy * ROTATE_3D_ORTHOGONALIZER;
+            double zz = z * ROOT3OVER3;
+            double xr = x + s2 + zz;
+            double yr = y + s2 + zz;
+            double zr = xy * -ROOT3OVER3 + zz;
+
+            // Evaluate both lattices to form a BCC lattice.
+            return Noise3_UnrotatedBase(seed,xr,yr,zr);
+        }
+
+        /**
+         * 3D OpenSimplex2 noise, with better visual isotropy in (X, Z).
+         * Recommended for 3D terrain and time-varied animations.
+         * The Y coordinate should always be the "different" coordinate in whatever your use case is.
+         * If Y is vertical in world coordinates, call Noise3_ImproveXZ(x, Y, z).
+         * If Z is vertical in world coordinates, call Noise3_ImproveXZ(x, Z, y) or use Noise3_ImproveXY.
+         * For a time varied animation, call Noise3_ImproveXZ(x, T, y) or use Noise3_ImproveXY.
+         */
+        public static float Noise3_ImproveXZ(long seed,double x,double y,double z) {
+            // Re-orient the cubic lattices without skewing, so Y points up the main lattice diagonal,
+            // and the planes formed by XZ are moved far out of alignment with the cube faces.
+            // Orthonormal rotation. Not a skew transform.
+            double xz = x + z;
+            double s2 = xz * ROTATE_3D_ORTHOGONALIZER;
+            double yy = y * ROOT3OVER3;
+            double xr = x + s2 + yy;
+            double zr = z + s2 + yy;
+            double yr = xz * -ROOT3OVER3 + yy;
+
+            // Evaluate both lattices to form a BCC lattice.
+            return Noise3_UnrotatedBase(seed,xr,yr,zr);
+        }
+
+        /**
+         * 3D OpenSimplex2 noise, fallback rotation option
+         * Use Noise3_ImproveXY or Noise3_ImproveXZ instead, wherever appropriate.
+         * They have less diagonal bias. This function's best use is as a fallback.
+         */
+        public static float Noise3_Fallback(long seed,double x,double y,double z) {
+            // Re-orient the cubic lattices via rotation, to produce a familiar look.
+            // Orthonormal rotation. Not a skew transform.
+            double r = FALLBACK_ROTATE_3D * (x + y + z);
+            double xr = r - x, yr = r - y, zr = r - z;
+
+            // Evaluate both lattices to form a BCC lattice.
+            return Noise3_UnrotatedBase(seed,xr,yr,zr);
+        }
+
+        /**
+         * Generate overlapping cubic lattices for 3D OpenSimplex2 noise.
+         */
+        private static float Noise3_UnrotatedBase(long seed,double xr,double yr,double zr) {
+            // Get base points and offsets.
+            int xrb = FastRound(xr), yrb = FastRound(yr), zrb = FastRound(zr);
+            float xri = (float)(xr - xrb), yri = (float)(yr - yrb), zri = (float)(zr - zrb);
+
+            // -1 if positive, 1 if negative.
+            int xNSign = (int)(-1.0f - xri) | 1, yNSign = (int)(-1.0f - yri) | 1, zNSign = (int)(-1.0f - zri) | 1;
+
+            // Compute absolute values, using the above as a shortcut. This was faster in my tests for some reason.
+            float ax0 = xNSign * -xri, ay0 = yNSign * -yri, az0 = zNSign * -zri;
+
+            // Prime pre-multiplication for hash.
+            long xrbp = xrb * PRIME_X, yrbp = yrb * PRIME_Y, zrbp = zrb * PRIME_Z;
+
+            // Loop: Pick an edge on each lattice copy.
+            float value = 0;
+            float a = (RSQUARED_3D - xri * xri) - (yri * yri + zri * zri);
+            for(int l = 0;;l++) {
+
+                // Closest point on cube.
+                if(a > 0) {
+                    value += (a * a) * (a * a) * Grad(seed,xrbp,yrbp,zrbp,xri,yri,zri);
                 }
-                current?.Next = new Contribution4(p4D[i + 1],p4D[i + 2],p4D[i + 3],p4D[i + 4],p4D[i + 5]) {
-                    Next = new Contribution4(p4D[i + 6],p4D[i + 7],p4D[i + 8],p4D[i + 9],p4D[i + 10]) {
-                        Next = new Contribution4(p4D[i + 11],p4D[i + 12],p4D[i + 13],p4D[i + 14],p4D[i + 15])
+
+                // Second-closest point.
+                if(ax0 >= ay0 && ax0 >= az0) {
+                    float b = a + ax0 + ax0;
+                    if(b > 1) {
+                        b -= 1;
+                        value += (b * b) * (b * b) * Grad(seed,xrbp - xNSign * PRIME_X,yrbp,zrbp,xri + xNSign,yri,zri);
                     }
-                };
+                } else if(ay0 > ax0 && ay0 >= az0) {
+                    float b = a + ay0 + ay0;
+                    if(b > 1) {
+                        b -= 1;
+                        value += (b * b) * (b * b) * Grad(seed,xrbp,yrbp - yNSign * PRIME_Y,zrbp,xri,yri + yNSign,zri);
+                    }
+                } else {
+                    float b = a + az0 + az0;
+                    if(b > 1) {
+                        b -= 1;
+                        value += (b * b) * (b * b) * Grad(seed,xrbp,yrbp,zrbp - zNSign * PRIME_Z,xri,yri,zri + zNSign);
+                    }
+                }
+
+                // Break from loop if we're done, skipping updates below.
+                if(l == 1) break;
+
+                // Update absolute value.
+                ax0 = 0.5f - ax0;
+                ay0 = 0.5f - ay0;
+                az0 = 0.5f - az0;
+
+                // Update relative coordinate.
+                xri = xNSign * ax0;
+                yri = yNSign * ay0;
+                zri = zNSign * az0;
+
+                // Update falloff.
+                a += (0.75f - ax0) - (ay0 + az0);
+
+                // Update prime for hash.
+                xrbp += (xNSign >> 1) & PRIME_X;
+                yrbp += (yNSign >> 1) & PRIME_Y;
+                zrbp += (zNSign >> 1) & PRIME_Z;
+
+                // Update the reverse sign indicators.
+                xNSign = -xNSign;
+                yNSign = -yNSign;
+                zNSign = -zNSign;
+
+                // And finally update the seed for the other lattice copy.
+                seed ^= SEED_FLIP_3D;
             }
 
-            lookup4D = new Contribution4[1048576];
-            for(var i = 0;i < lookupPairs4D.Length;i += 2) {
-                lookup4D[lookupPairs4D[i]] = contributions4D[lookupPairs4D[i + 1]];
+            return value;
+        }
+
+        /**
+         * 4D OpenSimplex2 noise, with XYZ oriented like Noise3_ImproveXY
+         * and W for an extra degree of freedom. W repeats eventually.
+         * Recommended for time-varied animations which texture a 3D object (W=time)
+         * in a space where Z is vertical
+         */
+        public static float Noise4_ImproveXYZ_ImproveXY(long seed,double x,double y,double z,double w) {
+            double xy = x + y;
+            double s2 = xy * -0.21132486540518699998;
+            double zz = z * 0.28867513459481294226;
+            double ww = w * 0.2236067977499788;
+            double xr = x + (zz + ww + s2), yr = y + (zz + ww + s2);
+            double zr = xy * -0.57735026918962599998 + (zz + ww);
+            double wr = z * -0.866025403784439 + ww;
+
+            return Noise4_UnskewedBase(seed,xr,yr,zr,wr);
+        }
+
+        /**
+         * 4D OpenSimplex2 noise, with XYZ oriented like Noise3_ImproveXZ
+         * and W for an extra degree of freedom. W repeats eventually.
+         * Recommended for time-varied animations which texture a 3D object (W=time)
+         * in a space where Y is vertical
+         */
+        public static float Noise4_ImproveXYZ_ImproveXZ(long seed,double x,double y,double z,double w) {
+            double xz = x + z;
+            double s2 = xz * -0.21132486540518699998;
+            double yy = y * 0.28867513459481294226;
+            double ww = w * 0.2236067977499788;
+            double xr = x + (yy + ww + s2), zr = z + (yy + ww + s2);
+            double yr = xz * -0.57735026918962599998 + (yy + ww);
+            double wr = y * -0.866025403784439 + ww;
+
+            return Noise4_UnskewedBase(seed,xr,yr,zr,wr);
+        }
+
+        /**
+         * 4D OpenSimplex2 noise, with XYZ oriented like Noise3_Fallback
+         * and W for an extra degree of freedom. W repeats eventually.
+         * Recommended for time-varied animations which texture a 3D object (W=time)
+         * where there isn't a clear distinction between horizontal and vertical
+         */
+        public static float Noise4_ImproveXYZ(long seed,double x,double y,double z,double w) {
+            double xyz = x + y + z;
+            double ww = w * 0.2236067977499788;
+            double s2 = xyz * -0.16666666666666666 + ww;
+            double xs = x + s2, ys = y + s2, zs = z + s2, ws = -0.5 * xyz + ww;
+
+            return Noise4_UnskewedBase(seed,xs,ys,zs,ws);
+        }
+
+        /**
+         * 4D OpenSimplex2 noise, fallback lattice orientation.
+         */
+        public static float Noise4_Fallback(long seed,double x,double y,double z,double w) {
+            // Get points for A4 lattice
+            double s = SKEW_4D * (x + y + z + w);
+            double xs = x + s, ys = y + s, zs = z + s, ws = w + s;
+
+            return Noise4_UnskewedBase(seed,xs,ys,zs,ws);
+        }
+
+        /**
+        * 4D OpenSimplex2 noise base.
+        */
+        private static float Noise4_UnskewedBase(long seed,double xs,double ys,double zs,double ws) {
+            // Get base points and offsets
+            int xsb = FastFloor(xs), ysb = FastFloor(ys), zsb = FastFloor(zs), wsb = FastFloor(ws);
+            float xsi = (float)(xs - xsb), ysi = (float)(ys - ysb), zsi = (float)(zs - zsb), wsi = (float)(ws - wsb);
+
+            // Determine which lattice we can be confident has a contributing point its corresponding cell's base simplex.
+            // We only look at the spaces between the diagonal planes. This proved effective in all of my tests.
+            float siSum = (xsi + ysi) + (zsi + wsi);
+            int startingLattice = (int)(siSum * 1.25);
+
+            // Offset for seed based on first lattice copy.
+            seed += startingLattice * SEED_OFFSET_4D;
+
+            // Offset for lattice point relative positions (skewed)
+            float startingLatticeOffset = startingLattice * -LATTICE_STEP_4D;
+            xsi += startingLatticeOffset; ysi += startingLatticeOffset; zsi += startingLatticeOffset; wsi += startingLatticeOffset;
+
+            // Prep for vertex contributions.
+            float ssi = (siSum + startingLatticeOffset * 4) * UNSKEW_4D;
+
+            // Prime pre-multiplication for hash.
+            long xsvp = xsb * PRIME_X, ysvp = ysb * PRIME_Y, zsvp = zsb * PRIME_Z, wsvp = wsb * PRIME_W;
+
+            // Five points to add, total, from five copies of the A4 lattice.
+            float value = 0;
+            for(int i = 0;;i++) {
+
+                // Next point is the closest vertex on the 4-simplex whose base vertex is the aforementioned vertex.
+                double score0 = 1.0 + ssi * (-1.0 / UNSKEW_4D); // Seems slightly faster than 1.0-xsi-ysi-zsi-wsi
+                if(xsi >= ysi && xsi >= zsi && xsi >= wsi && xsi >= score0) {
+                    xsvp += PRIME_X;
+                    xsi -= 1;
+                    ssi -= UNSKEW_4D;
+                } else if(ysi > xsi && ysi >= zsi && ysi >= wsi && ysi >= score0) {
+                    ysvp += PRIME_Y;
+                    ysi -= 1;
+                    ssi -= UNSKEW_4D;
+                } else if(zsi > xsi && zsi > ysi && zsi >= wsi && zsi >= score0) {
+                    zsvp += PRIME_Z;
+                    zsi -= 1;
+                    ssi -= UNSKEW_4D;
+                } else if(wsi > xsi && wsi > ysi && wsi > zsi && wsi >= score0) {
+                    wsvp += PRIME_W;
+                    wsi -= 1;
+                    ssi -= UNSKEW_4D;
+                }
+
+                // Gradient contribution with falloff.
+                float dx = xsi + ssi, dy = ysi + ssi, dz = zsi + ssi, dw = wsi + ssi;
+                float a = (dx * dx + dy * dy) + (dz * dz + dw * dw);
+                if(a < RSQUARED_4D) {
+                    a -= RSQUARED_4D;
+                    a *= a;
+                    value += a * a * Grad(seed,xsvp,ysvp,zsvp,wsvp,dx,dy,dz,dw);
+                }
+
+                // Break from loop if we're done, skipping updates below.
+                if(i == 4) break;
+
+                // Update for next lattice copy shifted down by <-0.2, -0.2, -0.2, -0.2>.
+                xsi += LATTICE_STEP_4D; ysi += LATTICE_STEP_4D; zsi += LATTICE_STEP_4D; wsi += LATTICE_STEP_4D;
+                ssi += LATTICE_STEP_4D * 4 * UNSKEW_4D;
+                seed -= SEED_OFFSET_4D;
+
+                // Because we don't always start on the same lattice copy, there's a special reset case.
+                if(i == startingLattice) {
+                    xsvp -= PRIME_X;
+                    ysvp -= PRIME_Y;
+                    zsvp -= PRIME_Z;
+                    wsvp -= PRIME_W;
+                    seed += SEED_OFFSET_4D * 5;
+                }
             }
+
+            return value;
+        }
+
+        /*
+         * Utility
+         */
+
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        private static float Grad(long seed,long xsvp,long ysvp,float dx,float dy) {
+            long hash = seed ^ xsvp ^ ysvp;
+            hash *= HASH_MULTIPLIER;
+            hash ^= hash >> (64 - N_GRADS_2D_EXPONENT + 1);
+            int gi = (int)hash & ((N_GRADS_2D - 1) << 1);
+            return GRADIENTS_2D[gi | 0] * dx + GRADIENTS_2D[gi | 1] * dy;
+        }
+
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        private static float Grad(long seed,long xrvp,long yrvp,long zrvp,float dx,float dy,float dz) {
+            long hash = (seed ^ xrvp) ^ (yrvp ^ zrvp);
+            hash *= HASH_MULTIPLIER;
+            hash ^= hash >> (64 - N_GRADS_3D_EXPONENT + 2);
+            int gi = (int)hash & ((N_GRADS_3D - 1) << 2);
+            return GRADIENTS_3D[gi | 0] * dx + GRADIENTS_3D[gi | 1] * dy + GRADIENTS_3D[gi | 2] * dz;
+        }
+
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        private static float Grad(long seed,long xsvp,long ysvp,long zsvp,long wsvp,float dx,float dy,float dz,float dw) {
+            long hash = seed ^ (xsvp ^ ysvp) ^ (zsvp ^ wsvp);
+            hash *= HASH_MULTIPLIER;
+            hash ^= hash >> (64 - N_GRADS_4D_EXPONENT + 2);
+            int gi = (int)hash & ((N_GRADS_4D - 1) << 2);
+            return (GRADIENTS_4D[gi | 0] * dx + GRADIENTS_4D[gi | 1] * dy) + (GRADIENTS_4D[gi | 2] * dz + GRADIENTS_4D[gi | 3] * dw);
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         private static int FastFloor(double x) {
-            var xi = (int)x;
+            int xi = (int)x;
             return x < xi ? xi - 1 : xi;
         }
 
-        public OpenSimplexNoise(long seed) {
-            perm = new byte[256];
-            perm2D = new byte[256];
-            perm3D = new byte[256];
-            perm4D = new byte[256];
-            var source = new byte[256];
-            for(int i = 0;i < 256;i++) {
-                source[i] = (byte)i;
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        private static int FastRound(double x) {
+            return x < 0 ? (int)(x - 0.5) : (int)(x + 0.5);
+        }
+
+        /*
+         * Gradients
+         */
+
+        private static readonly float[] GRADIENTS_2D;
+        private static readonly float[] GRADIENTS_3D;
+        private static readonly float[] GRADIENTS_4D;
+        static OpenSimplex2() {
+
+            GRADIENTS_2D = new float[N_GRADS_2D * 2];
+            float[] grad2 = [
+             0.38268343236509f,   0.923879532511287f,
+             0.923879532511287f,  0.38268343236509f,
+             0.923879532511287f, -0.38268343236509f,
+             0.38268343236509f,  -0.923879532511287f,
+            -0.38268343236509f,  -0.923879532511287f,
+            -0.923879532511287f, -0.38268343236509f,
+            -0.923879532511287f,  0.38268343236509f,
+            -0.38268343236509f,   0.923879532511287f,
+            //-------------------------------------//
+             0.130526192220052f,  0.99144486137381f,
+             0.608761429008721f,  0.793353340291235f,
+             0.793353340291235f,  0.608761429008721f,
+             0.99144486137381f,   0.130526192220051f,
+             0.99144486137381f,  -0.130526192220051f,
+             0.793353340291235f, -0.60876142900872f,
+             0.608761429008721f, -0.793353340291235f,
+             0.130526192220052f, -0.99144486137381f,
+            -0.130526192220052f, -0.99144486137381f,
+            -0.608761429008721f, -0.793353340291235f,
+            -0.793353340291235f, -0.608761429008721f,
+            -0.99144486137381f,  -0.130526192220052f,
+            -0.99144486137381f,   0.130526192220051f,
+            -0.793353340291235f,  0.608761429008721f,
+            -0.608761429008721f,  0.793353340291235f,
+            -0.130526192220052f,  0.99144486137381f,
+        ];
+            for(int i = 0;i < grad2.Length;i++) {
+                grad2[i] = (float)(grad2[i] / NORMALIZER_2D);
             }
-            seed = seed * 6364136223846793005L + 1442695040888963407L;
-            seed = seed * 6364136223846793005L + 1442695040888963407L;
-            seed = seed * 6364136223846793005L + 1442695040888963407L;
-            for(int i = 255;i >= 0;i--) {
-                seed = seed * 6364136223846793005L + 1442695040888963407L;
-                int r = (int)((seed + 31) % (i + 1));
-                if(r < 0) {
-                    r += (i + 1);
-                }
-                perm[i] = source[r];
-                perm2D[i] = (byte)(perm[i] & 0x0E);
-                perm3D[i] = (byte)((perm[i] % 24) * 3);
-                perm4D[i] = (byte)(perm[i] & 0xFC);
-                source[r] = source[i];
+            for(int i = 0, j = 0;i < GRADIENTS_2D.Length;i++, j++) {
+                if(j == grad2.Length) j = 0;
+                GRADIENTS_2D[i] = grad2[j];
             }
-        }
 
-        public double Evaluate(double x,double y) {
-            var stretchOffset = (x + y) * STRETCH_2D;
-            var xs = x + stretchOffset;
-            var ys = y + stretchOffset;
-
-            var xsb = FastFloor(xs);
-            var ysb = FastFloor(ys);
-
-            var squishOffset = (xsb + ysb) * SQUISH_2D;
-            var dx0 = x - (xsb + squishOffset);
-            var dy0 = y - (ysb + squishOffset);
-
-            var xins = xs - xsb;
-            var yins = ys - ysb;
-
-            var inSum = xins + yins;
-
-            var hash =
-               (int)(xins - yins + 1) |
-               (int)(inSum) << 1 |
-               (int)(inSum + yins) << 2 |
-               (int)(inSum + xins) << 4;
-
-            var c = lookup2D[hash];
-
-            var value = 0.0;
-            while(c != null) {
-                var dx = dx0 + c.dx;
-                var dy = dy0 + c.dy;
-                var attn = 2 - dx * dx - dy * dy;
-                if(attn > 0) {
-                    var px = xsb + c.xsb;
-                    var py = ysb + c.ysb;
-
-                    var i = perm2D[(perm[px & 0xFF] + py) & 0xFF];
-                    var valuePart = gradients2D[i] * dx + gradients2D[i + 1] * dy;
-
-                    attn *= attn;
-                    value += attn * attn * valuePart;
-                }
-                c = c.Next;
+            GRADIENTS_3D = new float[N_GRADS_3D * 4];
+            float[] grad3 = [
+             2.22474487139f,       2.22474487139f,      -1.0f,                 0.0f,
+             2.22474487139f,       2.22474487139f,       1.0f,                 0.0f,
+             3.0862664687972017f,  1.1721513422464978f,  0.0f,                 0.0f,
+             1.1721513422464978f,  3.0862664687972017f,  0.0f,                 0.0f,
+            -2.22474487139f,       2.22474487139f,      -1.0f,                 0.0f,
+            -2.22474487139f,       2.22474487139f,       1.0f,                 0.0f,
+            -1.1721513422464978f,  3.0862664687972017f,  0.0f,                 0.0f,
+            -3.0862664687972017f,  1.1721513422464978f,  0.0f,                 0.0f,
+            -1.0f,                -2.22474487139f,      -2.22474487139f,       0.0f,
+             1.0f,                -2.22474487139f,      -2.22474487139f,       0.0f,
+             0.0f,                -3.0862664687972017f, -1.1721513422464978f,  0.0f,
+             0.0f,                -1.1721513422464978f, -3.0862664687972017f,  0.0f,
+            -1.0f,                -2.22474487139f,       2.22474487139f,       0.0f,
+             1.0f,                -2.22474487139f,       2.22474487139f,       0.0f,
+             0.0f,                -1.1721513422464978f,  3.0862664687972017f,  0.0f,
+             0.0f,                -3.0862664687972017f,  1.1721513422464978f,  0.0f,
+            //--------------------------------------------------------------------//
+            -2.22474487139f,      -2.22474487139f,      -1.0f,                 0.0f,
+            -2.22474487139f,      -2.22474487139f,       1.0f,                 0.0f,
+            -3.0862664687972017f, -1.1721513422464978f,  0.0f,                 0.0f,
+            -1.1721513422464978f, -3.0862664687972017f,  0.0f,                 0.0f,
+            -2.22474487139f,      -1.0f,                -2.22474487139f,       0.0f,
+            -2.22474487139f,       1.0f,                -2.22474487139f,       0.0f,
+            -1.1721513422464978f,  0.0f,                -3.0862664687972017f,  0.0f,
+            -3.0862664687972017f,  0.0f,                -1.1721513422464978f,  0.0f,
+            -2.22474487139f,      -1.0f,                 2.22474487139f,       0.0f,
+            -2.22474487139f,       1.0f,                 2.22474487139f,       0.0f,
+            -3.0862664687972017f,  0.0f,                 1.1721513422464978f,  0.0f,
+            -1.1721513422464978f,  0.0f,                 3.0862664687972017f,  0.0f,
+            -1.0f,                 2.22474487139f,      -2.22474487139f,       0.0f,
+             1.0f,                 2.22474487139f,      -2.22474487139f,       0.0f,
+             0.0f,                 1.1721513422464978f, -3.0862664687972017f,  0.0f,
+             0.0f,                 3.0862664687972017f, -1.1721513422464978f,  0.0f,
+            -1.0f,                 2.22474487139f,       2.22474487139f,       0.0f,
+             1.0f,                 2.22474487139f,       2.22474487139f,       0.0f,
+             0.0f,                 3.0862664687972017f,  1.1721513422464978f,  0.0f,
+             0.0f,                 1.1721513422464978f,  3.0862664687972017f,  0.0f,
+             2.22474487139f,      -2.22474487139f,      -1.0f,                 0.0f,
+             2.22474487139f,      -2.22474487139f,       1.0f,                 0.0f,
+             1.1721513422464978f, -3.0862664687972017f,  0.0f,                 0.0f,
+             3.0862664687972017f, -1.1721513422464978f,  0.0f,                 0.0f,
+             2.22474487139f,      -1.0f,                -2.22474487139f,       0.0f,
+             2.22474487139f,       1.0f,                -2.22474487139f,       0.0f,
+             3.0862664687972017f,  0.0f,                -1.1721513422464978f,  0.0f,
+             1.1721513422464978f,  0.0f,                -3.0862664687972017f,  0.0f,
+             2.22474487139f,      -1.0f,                 2.22474487139f,       0.0f,
+             2.22474487139f,       1.0f,                 2.22474487139f,       0.0f,
+             1.1721513422464978f,  0.0f,                 3.0862664687972017f,  0.0f,
+             3.0862664687972017f,  0.0f,                 1.1721513422464978f,  0.0f,
+        ];
+            for(int i = 0;i < grad3.Length;i++) {
+                grad3[i] = (float)(grad3[i] / NORMALIZER_3D);
             }
-            return value * NORM_2D;
-        }
-
-        public double Evaluate(double x,double y,double z) {
-            var stretchOffset = (x + y + z) * STRETCH_3D;
-            var xs = x + stretchOffset;
-            var ys = y + stretchOffset;
-            var zs = z + stretchOffset;
-
-            var xsb = FastFloor(xs);
-            var ysb = FastFloor(ys);
-            var zsb = FastFloor(zs);
-
-            var squishOffset = (xsb + ysb + zsb) * SQUISH_3D;
-            var dx0 = x - (xsb + squishOffset);
-            var dy0 = y - (ysb + squishOffset);
-            var dz0 = z - (zsb + squishOffset);
-
-            var xins = xs - xsb;
-            var yins = ys - ysb;
-            var zins = zs - zsb;
-
-            var inSum = xins + yins + zins;
-
-            var hash =
-               (int)(yins - zins + 1) |
-               (int)(xins - yins + 1) << 1 |
-               (int)(xins - zins + 1) << 2 |
-               (int)inSum << 3 |
-               (int)(inSum + zins) << 5 |
-               (int)(inSum + yins) << 7 |
-               (int)(inSum + xins) << 9;
-
-            var c = lookup3D[hash];
-
-            var value = 0.0;
-            while(c != null) {
-                var dx = dx0 + c.dx;
-                var dy = dy0 + c.dy;
-                var dz = dz0 + c.dz;
-                var attn = 2 - dx * dx - dy * dy - dz * dz;
-                if(attn > 0) {
-                    var px = xsb + c.xsb;
-                    var py = ysb + c.ysb;
-                    var pz = zsb + c.zsb;
-
-                    var i = perm3D[(perm[(perm[px & 0xFF] + py) & 0xFF] + pz) & 0xFF];
-                    var valuePart = gradients3D[i] * dx + gradients3D[i + 1] * dy + gradients3D[i + 2] * dz;
-
-                    attn *= attn;
-                    value += attn * attn * valuePart;
-                }
-
-                c = c.Next;
+            for(int i = 0, j = 0;i < GRADIENTS_3D.Length;i++, j++) {
+                if(j == grad3.Length) j = 0;
+                GRADIENTS_3D[i] = grad3[j];
             }
-            return value * NORM_3D;
-        }
 
-        public double Evaluate(double x,double y,double z,double w) {
-            var stretchOffset = (x + y + z + w) * STRETCH_4D;
-            var xs = x + stretchOffset;
-            var ys = y + stretchOffset;
-            var zs = z + stretchOffset;
-            var ws = w + stretchOffset;
-
-            var xsb = FastFloor(xs);
-            var ysb = FastFloor(ys);
-            var zsb = FastFloor(zs);
-            var wsb = FastFloor(ws);
-
-            var squishOffset = (xsb + ysb + zsb + wsb) * SQUISH_4D;
-            var dx0 = x - (xsb + squishOffset);
-            var dy0 = y - (ysb + squishOffset);
-            var dz0 = z - (zsb + squishOffset);
-            var dw0 = w - (wsb + squishOffset);
-
-            var xins = xs - xsb;
-            var yins = ys - ysb;
-            var zins = zs - zsb;
-            var wins = ws - wsb;
-
-            var inSum = xins + yins + zins + wins;
-
-            var hash =
-                (int)(zins - wins + 1) |
-                (int)(yins - zins + 1) << 1 |
-                (int)(yins - wins + 1) << 2 |
-                (int)(xins - yins + 1) << 3 |
-                (int)(xins - zins + 1) << 4 |
-                (int)(xins - wins + 1) << 5 |
-                (int)inSum << 6 |
-                (int)(inSum + wins) << 8 |
-                (int)(inSum + zins) << 11 |
-                (int)(inSum + yins) << 14 |
-                (int)(inSum + xins) << 17;
-
-            var c = lookup4D[hash];
-
-            var value = 0.0;
-            while(c != null) {
-                var dx = dx0 + c.dx;
-                var dy = dy0 + c.dy;
-                var dz = dz0 + c.dz;
-                var dw = dw0 + c.dw;
-                var attn = 2 - dx * dx - dy * dy - dz * dz - dw * dw;
-                if(attn > 0) {
-                    var px = xsb + c.xsb;
-                    var py = ysb + c.ysb;
-                    var pz = zsb + c.zsb;
-                    var pw = wsb + c.wsb;
-
-                    var i = perm4D[(perm[(perm[(perm[px & 0xFF] + py) & 0xFF] + pz) & 0xFF] + pw) & 0xFF];
-                    var valuePart = gradients4D[i] * dx + gradients4D[i + 1] * dy + gradients4D[i + 2] * dz + gradients4D[i + 3] * dw;
-
-                    attn *= attn;
-                    value += attn * attn * valuePart;
-                }
-
-                c = c.Next;
+            GRADIENTS_4D = new float[N_GRADS_4D * 4];
+            float[] grad4 = [
+            -0.6740059517812944f,   -0.3239847771997537f,   -0.3239847771997537f,    0.5794684678643381f,
+            -0.7504883828755602f,   -0.4004672082940195f,    0.15296486218853164f,   0.5029860367700724f,
+            -0.7504883828755602f,    0.15296486218853164f,  -0.4004672082940195f,    0.5029860367700724f,
+            -0.8828161875373585f,    0.08164729285680945f,   0.08164729285680945f,   0.4553054119602712f,
+            -0.4553054119602712f,   -0.08164729285680945f,  -0.08164729285680945f,   0.8828161875373585f,
+            -0.5029860367700724f,   -0.15296486218853164f,   0.4004672082940195f,    0.7504883828755602f,
+            -0.5029860367700724f,    0.4004672082940195f,   -0.15296486218853164f,   0.7504883828755602f,
+            -0.5794684678643381f,    0.3239847771997537f,    0.3239847771997537f,    0.6740059517812944f,
+            -0.6740059517812944f,   -0.3239847771997537f,    0.5794684678643381f,   -0.3239847771997537f,
+            -0.7504883828755602f,   -0.4004672082940195f,    0.5029860367700724f,    0.15296486218853164f,
+            -0.7504883828755602f,    0.15296486218853164f,   0.5029860367700724f,   -0.4004672082940195f,
+            -0.8828161875373585f,    0.08164729285680945f,   0.4553054119602712f,    0.08164729285680945f,
+            -0.4553054119602712f,   -0.08164729285680945f,   0.8828161875373585f,   -0.08164729285680945f,
+            -0.5029860367700724f,   -0.15296486218853164f,   0.7504883828755602f,    0.4004672082940195f,
+            -0.5029860367700724f,    0.4004672082940195f,    0.7504883828755602f,   -0.15296486218853164f,
+            -0.5794684678643381f,    0.3239847771997537f,    0.6740059517812944f,    0.3239847771997537f,
+            -0.6740059517812944f,    0.5794684678643381f,   -0.3239847771997537f,   -0.3239847771997537f,
+            -0.7504883828755602f,    0.5029860367700724f,   -0.4004672082940195f,    0.15296486218853164f,
+            -0.7504883828755602f,    0.5029860367700724f,    0.15296486218853164f,  -0.4004672082940195f,
+            -0.8828161875373585f,    0.4553054119602712f,    0.08164729285680945f,   0.08164729285680945f,
+            -0.4553054119602712f,    0.8828161875373585f,   -0.08164729285680945f,  -0.08164729285680945f,
+            -0.5029860367700724f,    0.7504883828755602f,   -0.15296486218853164f,   0.4004672082940195f,
+            -0.5029860367700724f,    0.7504883828755602f,    0.4004672082940195f,   -0.15296486218853164f,
+            -0.5794684678643381f,    0.6740059517812944f,    0.3239847771997537f,    0.3239847771997537f,
+             0.5794684678643381f,   -0.6740059517812944f,   -0.3239847771997537f,   -0.3239847771997537f,
+             0.5029860367700724f,   -0.7504883828755602f,   -0.4004672082940195f,    0.15296486218853164f,
+             0.5029860367700724f,   -0.7504883828755602f,    0.15296486218853164f,  -0.4004672082940195f,
+             0.4553054119602712f,   -0.8828161875373585f,    0.08164729285680945f,   0.08164729285680945f,
+             0.8828161875373585f,   -0.4553054119602712f,   -0.08164729285680945f,  -0.08164729285680945f,
+             0.7504883828755602f,   -0.5029860367700724f,   -0.15296486218853164f,   0.4004672082940195f,
+             0.7504883828755602f,   -0.5029860367700724f,    0.4004672082940195f,   -0.15296486218853164f,
+             0.6740059517812944f,   -0.5794684678643381f,    0.3239847771997537f,    0.3239847771997537f,
+            //------------------------------------------------------------------------------------------//
+            -0.753341017856078f,    -0.37968289875261624f,  -0.37968289875261624f,  -0.37968289875261624f,
+            -0.7821684431180708f,   -0.4321472685365301f,   -0.4321472685365301f,    0.12128480194602098f,
+            -0.7821684431180708f,   -0.4321472685365301f,    0.12128480194602098f,  -0.4321472685365301f,
+            -0.7821684431180708f,    0.12128480194602098f,  -0.4321472685365301f,   -0.4321472685365301f,
+            -0.8586508742123365f,   -0.508629699630796f,     0.044802370851755174f,  0.044802370851755174f,
+            -0.8586508742123365f,    0.044802370851755174f, -0.508629699630796f,     0.044802370851755174f,
+            -0.8586508742123365f,    0.044802370851755174f,  0.044802370851755174f, -0.508629699630796f,
+            -0.9982828964265062f,   -0.03381941603233842f,  -0.03381941603233842f,  -0.03381941603233842f,
+            -0.37968289875261624f,  -0.753341017856078f,    -0.37968289875261624f,  -0.37968289875261624f,
+            -0.4321472685365301f,   -0.7821684431180708f,   -0.4321472685365301f,    0.12128480194602098f,
+            -0.4321472685365301f,   -0.7821684431180708f,    0.12128480194602098f,  -0.4321472685365301f,
+             0.12128480194602098f,  -0.7821684431180708f,   -0.4321472685365301f,   -0.4321472685365301f,
+            -0.508629699630796f,    -0.8586508742123365f,    0.044802370851755174f,  0.044802370851755174f,
+             0.044802370851755174f, -0.8586508742123365f,   -0.508629699630796f,     0.044802370851755174f,
+             0.044802370851755174f, -0.8586508742123365f,    0.044802370851755174f, -0.508629699630796f,
+            -0.03381941603233842f,  -0.9982828964265062f,   -0.03381941603233842f,  -0.03381941603233842f,
+            -0.37968289875261624f,  -0.37968289875261624f,  -0.753341017856078f,    -0.37968289875261624f,
+            -0.4321472685365301f,   -0.4321472685365301f,   -0.7821684431180708f,    0.12128480194602098f,
+            -0.4321472685365301f,    0.12128480194602098f,  -0.7821684431180708f,   -0.4321472685365301f,
+             0.12128480194602098f,  -0.4321472685365301f,   -0.7821684431180708f,   -0.4321472685365301f,
+            -0.508629699630796f,     0.044802370851755174f, -0.8586508742123365f,    0.044802370851755174f,
+             0.044802370851755174f, -0.508629699630796f,    -0.8586508742123365f,    0.044802370851755174f,
+             0.044802370851755174f,  0.044802370851755174f, -0.8586508742123365f,   -0.508629699630796f,
+            -0.03381941603233842f,  -0.03381941603233842f,  -0.9982828964265062f,   -0.03381941603233842f,
+            -0.37968289875261624f,  -0.37968289875261624f,  -0.37968289875261624f,  -0.753341017856078f,
+            -0.4321472685365301f,   -0.4321472685365301f,    0.12128480194602098f,  -0.7821684431180708f,
+            -0.4321472685365301f,    0.12128480194602098f,  -0.4321472685365301f,   -0.7821684431180708f,
+             0.12128480194602098f,  -0.4321472685365301f,   -0.4321472685365301f,   -0.7821684431180708f,
+            -0.508629699630796f,     0.044802370851755174f,  0.044802370851755174f, -0.8586508742123365f,
+             0.044802370851755174f, -0.508629699630796f,     0.044802370851755174f, -0.8586508742123365f,
+             0.044802370851755174f,  0.044802370851755174f, -0.508629699630796f,    -0.8586508742123365f,
+            -0.03381941603233842f,  -0.03381941603233842f,  -0.03381941603233842f,  -0.9982828964265062f,
+            -0.3239847771997537f,   -0.6740059517812944f,   -0.3239847771997537f,    0.5794684678643381f,
+            -0.4004672082940195f,   -0.7504883828755602f,    0.15296486218853164f,   0.5029860367700724f,
+             0.15296486218853164f,  -0.7504883828755602f,   -0.4004672082940195f,    0.5029860367700724f,
+             0.08164729285680945f,  -0.8828161875373585f,    0.08164729285680945f,   0.4553054119602712f,
+            -0.08164729285680945f,  -0.4553054119602712f,   -0.08164729285680945f,   0.8828161875373585f,
+            -0.15296486218853164f,  -0.5029860367700724f,    0.4004672082940195f,    0.7504883828755602f,
+             0.4004672082940195f,   -0.5029860367700724f,   -0.15296486218853164f,   0.7504883828755602f,
+             0.3239847771997537f,   -0.5794684678643381f,    0.3239847771997537f,    0.6740059517812944f,
+            -0.3239847771997537f,   -0.3239847771997537f,   -0.6740059517812944f,    0.5794684678643381f,
+            -0.4004672082940195f,    0.15296486218853164f,  -0.7504883828755602f,    0.5029860367700724f,
+             0.15296486218853164f,  -0.4004672082940195f,   -0.7504883828755602f,    0.5029860367700724f,
+             0.08164729285680945f,   0.08164729285680945f,  -0.8828161875373585f,    0.4553054119602712f,
+            -0.08164729285680945f,  -0.08164729285680945f,  -0.4553054119602712f,    0.8828161875373585f,
+            -0.15296486218853164f,   0.4004672082940195f,   -0.5029860367700724f,    0.7504883828755602f,
+             0.4004672082940195f,   -0.15296486218853164f,  -0.5029860367700724f,    0.7504883828755602f,
+             0.3239847771997537f,    0.3239847771997537f,   -0.5794684678643381f,    0.6740059517812944f,
+            -0.3239847771997537f,   -0.6740059517812944f,    0.5794684678643381f,   -0.3239847771997537f,
+            -0.4004672082940195f,   -0.7504883828755602f,    0.5029860367700724f,    0.15296486218853164f,
+             0.15296486218853164f,  -0.7504883828755602f,    0.5029860367700724f,   -0.4004672082940195f,
+             0.08164729285680945f,  -0.8828161875373585f,    0.4553054119602712f,    0.08164729285680945f,
+            -0.08164729285680945f,  -0.4553054119602712f,    0.8828161875373585f,   -0.08164729285680945f,
+            -0.15296486218853164f,  -0.5029860367700724f,    0.7504883828755602f,    0.4004672082940195f,
+             0.4004672082940195f,   -0.5029860367700724f,    0.7504883828755602f,   -0.15296486218853164f,
+             0.3239847771997537f,   -0.5794684678643381f,    0.6740059517812944f,    0.3239847771997537f,
+            -0.3239847771997537f,   -0.3239847771997537f,    0.5794684678643381f,   -0.6740059517812944f,
+            -0.4004672082940195f,    0.15296486218853164f,   0.5029860367700724f,   -0.7504883828755602f,
+             0.15296486218853164f,  -0.4004672082940195f,    0.5029860367700724f,   -0.7504883828755602f,
+             0.08164729285680945f,   0.08164729285680945f,   0.4553054119602712f,   -0.8828161875373585f,
+            -0.08164729285680945f,  -0.08164729285680945f,   0.8828161875373585f,   -0.4553054119602712f,
+            -0.15296486218853164f,   0.4004672082940195f,    0.7504883828755602f,   -0.5029860367700724f,
+             0.4004672082940195f,   -0.15296486218853164f,   0.7504883828755602f,   -0.5029860367700724f,
+             0.3239847771997537f,    0.3239847771997537f,    0.6740059517812944f,   -0.5794684678643381f,
+            -0.3239847771997537f,    0.5794684678643381f,   -0.6740059517812944f,   -0.3239847771997537f,
+            -0.4004672082940195f,    0.5029860367700724f,   -0.7504883828755602f,    0.15296486218853164f,
+             0.15296486218853164f,   0.5029860367700724f,   -0.7504883828755602f,   -0.4004672082940195f,
+             0.08164729285680945f,   0.4553054119602712f,   -0.8828161875373585f,    0.08164729285680945f,
+            -0.08164729285680945f,   0.8828161875373585f,   -0.4553054119602712f,   -0.08164729285680945f,
+            -0.15296486218853164f,   0.7504883828755602f,   -0.5029860367700724f,    0.4004672082940195f,
+             0.4004672082940195f,    0.7504883828755602f,   -0.5029860367700724f,   -0.15296486218853164f,
+             0.3239847771997537f,    0.6740059517812944f,   -0.5794684678643381f,    0.3239847771997537f,
+            -0.3239847771997537f,    0.5794684678643381f,   -0.3239847771997537f,   -0.6740059517812944f,
+            -0.4004672082940195f,    0.5029860367700724f,    0.15296486218853164f,  -0.7504883828755602f,
+             0.15296486218853164f,   0.5029860367700724f,   -0.4004672082940195f,   -0.7504883828755602f,
+             0.08164729285680945f,   0.4553054119602712f,    0.08164729285680945f,  -0.8828161875373585f,
+            -0.08164729285680945f,   0.8828161875373585f,   -0.08164729285680945f,  -0.4553054119602712f,
+            -0.15296486218853164f,   0.7504883828755602f,    0.4004672082940195f,   -0.5029860367700724f,
+             0.4004672082940195f,    0.7504883828755602f,   -0.15296486218853164f,  -0.5029860367700724f,
+             0.3239847771997537f,    0.6740059517812944f,    0.3239847771997537f,   -0.5794684678643381f,
+             0.5794684678643381f,   -0.3239847771997537f,   -0.6740059517812944f,   -0.3239847771997537f,
+             0.5029860367700724f,   -0.4004672082940195f,   -0.7504883828755602f,    0.15296486218853164f,
+             0.5029860367700724f,    0.15296486218853164f,  -0.7504883828755602f,   -0.4004672082940195f,
+             0.4553054119602712f,    0.08164729285680945f,  -0.8828161875373585f,    0.08164729285680945f,
+             0.8828161875373585f,   -0.08164729285680945f,  -0.4553054119602712f,   -0.08164729285680945f,
+             0.7504883828755602f,   -0.15296486218853164f,  -0.5029860367700724f,    0.4004672082940195f,
+             0.7504883828755602f,    0.4004672082940195f,   -0.5029860367700724f,   -0.15296486218853164f,
+             0.6740059517812944f,    0.3239847771997537f,   -0.5794684678643381f,    0.3239847771997537f,
+             0.5794684678643381f,   -0.3239847771997537f,   -0.3239847771997537f,   -0.6740059517812944f,
+             0.5029860367700724f,   -0.4004672082940195f,    0.15296486218853164f,  -0.7504883828755602f,
+             0.5029860367700724f,    0.15296486218853164f,  -0.4004672082940195f,   -0.7504883828755602f,
+             0.4553054119602712f,    0.08164729285680945f,   0.08164729285680945f,  -0.8828161875373585f,
+             0.8828161875373585f,   -0.08164729285680945f,  -0.08164729285680945f,  -0.4553054119602712f,
+             0.7504883828755602f,   -0.15296486218853164f,   0.4004672082940195f,   -0.5029860367700724f,
+             0.7504883828755602f,    0.4004672082940195f,   -0.15296486218853164f,  -0.5029860367700724f,
+             0.6740059517812944f,    0.3239847771997537f,    0.3239847771997537f,   -0.5794684678643381f,
+             0.03381941603233842f,   0.03381941603233842f,   0.03381941603233842f,   0.9982828964265062f,
+            -0.044802370851755174f, -0.044802370851755174f,  0.508629699630796f,     0.8586508742123365f,
+            -0.044802370851755174f,  0.508629699630796f,    -0.044802370851755174f,  0.8586508742123365f,
+            -0.12128480194602098f,   0.4321472685365301f,    0.4321472685365301f,    0.7821684431180708f,
+             0.508629699630796f,    -0.044802370851755174f, -0.044802370851755174f,  0.8586508742123365f,
+             0.4321472685365301f,   -0.12128480194602098f,   0.4321472685365301f,    0.7821684431180708f,
+             0.4321472685365301f,    0.4321472685365301f,   -0.12128480194602098f,   0.7821684431180708f,
+             0.37968289875261624f,   0.37968289875261624f,   0.37968289875261624f,   0.753341017856078f,
+             0.03381941603233842f,   0.03381941603233842f,   0.9982828964265062f,    0.03381941603233842f,
+            -0.044802370851755174f,  0.044802370851755174f,  0.8586508742123365f,    0.508629699630796f,
+            -0.044802370851755174f,  0.508629699630796f,     0.8586508742123365f,   -0.044802370851755174f,
+            -0.12128480194602098f,   0.4321472685365301f,    0.7821684431180708f,    0.4321472685365301f,
+             0.508629699630796f,    -0.044802370851755174f,  0.8586508742123365f,   -0.044802370851755174f,
+             0.4321472685365301f,   -0.12128480194602098f,   0.7821684431180708f,    0.4321472685365301f,
+             0.4321472685365301f,    0.4321472685365301f,    0.7821684431180708f,   -0.12128480194602098f,
+             0.37968289875261624f,   0.37968289875261624f,   0.753341017856078f,     0.37968289875261624f,
+             0.03381941603233842f,   0.9982828964265062f,    0.03381941603233842f,   0.03381941603233842f,
+            -0.044802370851755174f,  0.8586508742123365f,   -0.044802370851755174f,  0.508629699630796f,
+            -0.044802370851755174f,  0.8586508742123365f,    0.508629699630796f,    -0.044802370851755174f,
+            -0.12128480194602098f,   0.7821684431180708f,    0.4321472685365301f,    0.4321472685365301f,
+             0.508629699630796f,     0.8586508742123365f,   -0.044802370851755174f, -0.044802370851755174f,
+             0.4321472685365301f,    0.7821684431180708f,   -0.12128480194602098f,   0.4321472685365301f,
+             0.4321472685365301f,    0.7821684431180708f,    0.4321472685365301f,   -0.12128480194602098f,
+             0.37968289875261624f,   0.753341017856078f,     0.37968289875261624f,   0.37968289875261624f,
+             0.9982828964265062f,    0.03381941603233842f,   0.03381941603233842f,   0.03381941603233842f,
+             0.8586508742123365f,   -0.044802370851755174f, -0.044802370851755174f,  0.508629699630796f,
+             0.8586508742123365f,   -0.044802370851755174f,  0.508629699630796f,    -0.044802370851755174f,
+             0.7821684431180708f,   -0.12128480194602098f,   0.4321472685365301f,    0.4321472685365301f,
+             0.8586508742123365f,    0.508629699630796f,    -0.044802370851755174f, -0.044802370851755174f,
+             0.7821684431180708f,    0.4321472685365301f,   -0.12128480194602098f,   0.4321472685365301f,
+             0.7821684431180708f,    0.4321472685365301f,    0.4321472685365301f,   -0.12128480194602098f,
+             0.753341017856078f,     0.37968289875261624f,   0.37968289875261624f,   0.37968289875261624f,
+        ];
+            for(int i = 0;i < grad4.Length;i++) {
+                grad4[i] = (float)(grad4[i] / NORMALIZER_4D);
             }
-            return value * NORM_4D;
-        }
-
-        private class Contribution2(double multiplier,int xsb,int ysb) {
-            public double dx = -xsb - multiplier * SQUISH_2D;
-            public double dy = -ysb - multiplier * SQUISH_2D;
-
-            public int xsb = xsb;
-            public int ysb = ysb;
-            public Contribution2? Next;
-        }
-
-        private class Contribution3(double multiplier,int xsb,int ysb,int zsb) {
-            public double dx = -xsb - multiplier * SQUISH_3D;
-            public double dy = -ysb - multiplier * SQUISH_3D;
-            public double dz = -zsb - multiplier * SQUISH_3D;
-
-            public int xsb = xsb;
-            public int ysb = ysb;
-            public int zsb = zsb;
-            public Contribution3? Next;
-        }
-
-        private class Contribution4(double multiplier,int xsb,int ysb,int zsb,int wsb) {
-            public double dx = -xsb - multiplier * SQUISH_4D;
-            public double dy = -ysb - multiplier * SQUISH_4D;
-            public double dz = -zsb - multiplier * SQUISH_4D;
-            public double dw = -wsb - multiplier * SQUISH_4D;
-
-            public int xsb = xsb;
-            public int ysb = ysb;
-            public int zsb = zsb;
-            public int wsb = wsb;
-            public Contribution4? Next;
+            for(int i = 0, j = 0;i < GRADIENTS_4D.Length;i++, j++) {
+                if(j == grad4.Length) j = 0;
+                GRADIENTS_4D[i] = grad4[j];
+            }
         }
     }
 }

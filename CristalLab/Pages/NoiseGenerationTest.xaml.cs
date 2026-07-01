@@ -24,8 +24,6 @@ namespace CristalLab.Pages {
 
         private WriteableBitmap? _tempOutput = null;
 
-        private OpenSimplexNoiseFast? _openSimplex = null;
-
         public int CurrentSize { get; private set; } = 0;
 
         public NoiseGenerationTest() {
@@ -90,16 +88,14 @@ namespace CristalLab.Pages {
             var dispatcher = DispatcherQueue;
             var cristal = Session.Cristal;
 
-            _openSimplex ??= cristal.CreateOpenSimplex(FIXED_SEED);
-
             var noiseScale = (float)ScaleSlider.Value;
-            var openSimplex = _openSimplex;
 
             NoiseTextureConfig config = new(
                 Scale: (float)ScaleSlider.Value,
                 IslandFilterEnabled: IslandToggleSwitch.IsOn,
                 IslandCenter: (float)IslandPivotSlider.Value,
-                IslandRange: (float)IslandRolloffSlider.Value
+                IslandRange: (float)IslandRolloffSlider.Value,
+                Seed: FIXED_SEED
             );
 
             ResolutionText.Text = $"Loading...";
@@ -110,7 +106,7 @@ namespace CristalLab.Pages {
                 try {
                     await Task.Delay(FULL_RES_DELAY,token);
 
-                    texture = cristal.CreateNoiseTexture(fullSize,openSimplex,config,token);
+                    texture = cristal.CreateNoiseTexture(fullSize,config,token);
 
                     token.ThrowIfCancellationRequested();
 
@@ -140,7 +136,7 @@ namespace CristalLab.Pages {
 
             if(parametersChanged) {
                 TextureSize shortSize = new(TEMP_BITMAP_SIZE);
-                using var tmpTexture = cristal.CreateNoiseTexture(shortSize,openSimplex,config);
+                using var tmpTexture = cristal.CreateNoiseTexture(shortSize,config);
                 PushTextureToBitmap(tmpTexture,_tempOutput);
 
                 BitmapContainer.Source = _tempOutput;

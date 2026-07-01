@@ -42,23 +42,21 @@ namespace Cristal {
             _random = new Random(seed);
         }
 
-        public OpenSimplexNoiseFast CreateOpenSimplex(long? seed = null) {
-            return new OpenSimplexNoiseFast(seed ?? _random.NextInt64());
-        }
-
-        public Texture<byte> CreateNoiseTexture(TextureSize size,OpenSimplexNoiseFast openSimplexNoise,NoiseTextureConfig config,CancellationToken? token = null) {
+        public Texture<byte> CreateNoiseTexture(TextureSize size,NoiseTextureConfig config,CancellationToken? token = null) {
 
             var scale = 1.0f / size.Height * config.Scale;
 
-            IslandFilter islandFilter = new(config.IslandCenter,config.IslandRange);
 
             float offsetBase = config.HalfPixelOffsetEnabled ? 0.5f : 0.0f;
 
             float xOffset = offsetBase + size.Width * -config.OriginX;
             float yOffset = offsetBase + size.Height * -config.OriginY;
 
-            var pipeline = PipelineFactory.CreatePipeline<Point,float,Noise>(new(openSimplexNoise,scale,xOffset,yOffset))
-                .AppendOptional(islandFilter,config.IslandFilterEnabled)
+            Noise noise = new(config.Seed ?? _random.NextInt64(),scale,xOffset,yOffset);
+            Island island = new(config.IslandCenter,config.IslandRange);
+
+            var pipeline = PipelineFactory.CreatePipeline<Point,float,Noise>(noise)
+                .AppendOptional(island,config.IslandFilterEnabled)
                 .Append<byte,FloatToByte>();
 
             Texture<byte> texture = new(size,_arrayPool);
@@ -87,6 +85,7 @@ namespace Cristal {
         bool HalfPixelOffsetEnabled = true,
         bool IslandFilterEnabled = false,
         float IslandCenter = 0.5f,
-        float IslandRange = 0.05f
+        float IslandRange = 0.05f,
+        long? Seed = null
     );
 }

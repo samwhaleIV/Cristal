@@ -1,5 +1,5 @@
 ﻿namespace Cristal.Pipeline.Filters {
-    public readonly struct IslandFilter(float center,float range):IFilter<float,float> {
+    public readonly struct Island(float center,float range):IFilter<float,float> {
 
         private readonly record struct IslandRange(float Floor,float Ceiling) {
             public readonly float Reciprocal { get; init; } = 1.0f / (Ceiling - Floor);
