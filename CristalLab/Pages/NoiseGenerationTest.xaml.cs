@@ -14,10 +14,8 @@ namespace CristalLab.Pages {
     public sealed partial class NoiseGenerationTest:WorkspacePage {
 
         private const long FIXED_SEED = 0;
-
         private const int TEMP_BITMAP_SIZE = 64;
-
-        private const int FULL_RES_DELAY = 100;
+        private const int FULL_RES_DELAY = 50;
 
         private WriteableBitmap? _fullOutput = null;
         private CancellationTokenSource? _cancellationTokenSource = null;
@@ -36,16 +34,9 @@ namespace CristalLab.Pages {
             }
         }
 
-        private static void PushTextureToBitmap(Texture<byte> texture,WriteableBitmap bitmap) {
-            using(var pixelStream = bitmap.PixelBuffer.AsStream()) {
-                pixelStream.Seek(0,SeekOrigin.Begin);
-                for(int i = 0;i<texture.Data.Length;i++) {
-                    byte value = texture.Data[i];
-                    pixelStream.WriteByte(value);
-                    pixelStream.WriteByte(value);
-                    pixelStream.WriteByte(value);
-                    pixelStream.WriteByte(byte.MaxValue);
-                }
+        private static void PushTextureToBitmap(ByteBuffer buffer,WriteableBitmap bitmap) {
+            using(var stream = bitmap.PixelBuffer.AsStream()) {
+                buffer.WriteToStream(stream);
             }
             bitmap.Invalidate();
         }
@@ -98,47 +89,60 @@ namespace CristalLab.Pages {
                 Seed: FIXED_SEED
             );
 
-            ResolutionText.Text = $"Loading...";
+            ResolutionText.Text = $"Rendering";
             RenderProgressBar.IsIndeterminate = true;
 
             Task.Run(async () => {
                 Texture<byte>? texture = null;
+                ByteBuffer? rgbaData = null;
+
+                void cleanup() {
+                    texture?.Dispose();
+                    texture = null;
+                    rgbaData?.Dispose();
+                    rgbaData = null;
+                }
+
                 try {
                     await Task.Delay(FULL_RES_DELAY,token);
 
-                    texture = cristal.CreateNoiseTexture(fullSize,config,token);
+                    texture = cristal.CreateNoiseTextureParallel(fullSize,config,token);
+                    rgbaData = cristal.MonochromeToRGBA(texture.Value);
+                    texture.Value.Dispose();
+                    texture = null;
 
                     token.ThrowIfCancellationRequested();
 
                     dispatcher.TryEnqueue(() => {
-                        if(token.IsCancellationRequested || texture is null) {
+                        if(token.IsCancellationRequested || rgbaData is null) {
+                            cleanup();
                             return;
                         }
-                        PushTextureToBitmap(texture.Value,_fullOutput);
+
+                        PushTextureToBitmap(rgbaData.Value,_fullOutput);
 
                         BitmapContainer.Source = _fullOutput;
                         ResolutionText.Text = $"{_fullOutput.PixelWidth}x{_fullOutput.PixelHeight}";
                         RenderProgressBar.IsIndeterminate = false;
 
-                        texture?.Dispose();
-                        texture = null;
+                        cleanup();
                     });
                 } catch(OperationCanceledException exception) {
                     Debug.WriteLine($"Background texture generation canceled: {exception.Message}");
-                    texture?.Dispose();
-                    texture = null;
+                    cleanup();
                 } catch(Exception exception) {
                     Debug.WriteLine($"Background texture generation failed unexpectedly: {exception.Message}");
-                    texture?.Dispose();
-                    texture = null;
+                    cleanup();
                 }
             },token);
 
             if(parametersChanged) {
                 TextureSize shortSize = new(TEMP_BITMAP_SIZE);
-                using var tmpTexture = cristal.CreateNoiseTexture(shortSize,config);
-                PushTextureToBitmap(tmpTexture,_tempOutput);
-
+                var tmpTexture = cristal.CreateNoiseTexture(shortSize,config);
+                var rgbaData = cristal.MonochromeToRGBA(tmpTexture);
+                tmpTexture.Dispose();
+                PushTextureToBitmap(rgbaData,_tempOutput);
+                rgbaData.Dispose();
                 BitmapContainer.Source = _tempOutput;
             }
         }

@@ -42,39 +42,71 @@ namespace Cristal {
             _random = new Random(seed);
         }
 
-        public Texture<byte> CreateNoiseTexture(TextureSize size,NoiseTextureConfig config,CancellationToken? token = null) {
+        public ByteBuffer MonochromeToRGBA(Texture<byte> texture) {
+            ByteBuffer buffer = new(texture.Size.Area * 4,_arrayPool);
 
-            var scale = 1.0f / size.Height * config.Scale;
+            Span<byte> rgba = buffer.CreateSpan();
+            ReadOnlySpan<byte> mc = texture.CreateSpan();
 
+            for(int i = 0;i<mc.Length;i++) {
+                byte value = mc[i];
+                rgba[(i*4)] = value;
+                rgba[(i*4) + 1] = value;
+                rgba[(i*4) + 2] = value;
+                rgba[(i*4) + 3] = byte.MaxValue;
+            }
+            return buffer;
+        }
 
-            float offsetBase = config.HalfPixelOffsetEnabled ? 0.5f : 0.0f;
+        private Texture<byte> CreateNoiseTexture(TextureSize size,NoiseTextureConfig config,bool parallelExecutionEnabled = false,CancellationToken? cancellationToken = null) {
 
-            float xOffset = offsetBase + size.Width * -config.OriginX;
-            float yOffset = offsetBase + size.Height * -config.OriginY;
+            float halfPixelOffset = config.HalfPixelOffsetEnabled ? 0.5f : 0.0f;
+            float xOffset = MathF.FusedMultiplyAdd(size.Width,-config.OriginX,halfPixelOffset);
+            float yOffset = MathF.FusedMultiplyAdd(size.Height,-config.OriginY,halfPixelOffset);
 
+            float scale = 1.0f / size.Height * config.Scale;
             Noise noise = new(config.Seed ?? _random.NextInt64(),scale,xOffset,yOffset);
             Island island = new(config.IslandCenter,config.IslandRange);
+
+            Texture<byte> texture = new(size,_arrayPool);
+            byte[] data = texture.GetInternalArray();
 
             var pipeline = PipelineFactory.CreatePipeline<Point,float,Noise>(noise)
                 .AppendOptional(island,config.IslandFilterEnabled)
                 .Append<byte,FloatToByte>();
 
-            Texture<byte> texture = new(size,_arrayPool);
-            Span<byte> data = texture.Data;
+            int width = size.Width;
 
-            int i = 0;
-
-            for(int y = 0;y < size.Height;y++) {
-
-                for(int x = 0;x < size.Width;x++) {
-                    byte value = pipeline.Process(new Point(x,y));
-                    data[i++] = value;
-
-                    token?.ThrowIfCancellationRequested();
+            if(parallelExecutionEnabled) {
+                ParallelOptions options = new();
+                if(cancellationToken.HasValue) {
+                    options.CancellationToken = cancellationToken.Value;
+                }
+                Parallel.For(0,size.Height,options,y => {
+                    int rowStart = y * width;
+                    for(int x = 0;x < width;x++) {
+                        byte value = pipeline.Process(new Point(x,y));
+                        data[rowStart + x] = value;
+                    }
+                });
+            } else {
+                int i = 0;
+                for(int y = 0;y < size.Height;y++) {
+                    for(int x = 0;x < size.Width;x++) {
+                        byte value = pipeline.Process(new Point(x,y));
+                        data[i++] = value;
+                    }
                 }
             }
-
             return texture;
+        }
+
+        public Texture<byte> CreateNoiseTexture(TextureSize size,NoiseTextureConfig config) {
+            return CreateNoiseTexture(size, config, parallelExecutionEnabled: false, cancellationToken: null);
+        }
+
+        public Texture<byte> CreateNoiseTextureParallel(TextureSize size,NoiseTextureConfig config,CancellationToken? cancellationToken = null) {
+            return CreateNoiseTexture(size, config, parallelExecutionEnabled: true, cancellationToken);
         }
     }
 
