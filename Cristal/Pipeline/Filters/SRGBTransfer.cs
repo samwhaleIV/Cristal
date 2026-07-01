@@ -1,5 +1,6 @@
 ﻿namespace Cristal.Pipeline.Filters {
-    public readonly struct ToSRGB:IFilter<float,float> {
+    public readonly struct SRGBTransfer:IFilter<float,float> {
+        // Note: This is the full, standardized sRGB transfer function with a linear shadow component. Using a power operator with gamma '1.0 / 2.2' is usually sufficient.
         public float Process(float value) {
             if(value <= 0.0031308f) {
                 return value * 12.92f;

@@ -8,7 +8,6 @@ using System.IO;
 using System.Runtime.InteropServices.WindowsRuntime;
 using System.Threading;
 using System.Threading.Tasks;
-using static Cristal.Pipeline.Filters.IslandFilter;
 
 namespace CristalLab.Pages {
 
@@ -17,7 +16,6 @@ namespace CristalLab.Pages {
         private const long FIXED_SEED = 0;
 
         private const int TEMP_BITMAP_SIZE = 64;
-        private const int FULL_RES_BITMAP_SIZE = 512;
 
         private const int FULL_RES_DELAY = 100;
 
@@ -26,13 +24,17 @@ namespace CristalLab.Pages {
 
         private WriteableBitmap? _tempOutput = null;
 
+        private OpenSimplexNoiseFast? _openSimplex = null;
+
+        public int CurrentSize { get; private set; } = 0;
+
         public NoiseGenerationTest() {
             InitializeComponent();
         }
 
         private void WorkspacePage_Loaded(object sender,RoutedEventArgs e) {
             if(_fullOutput is null) {
-                Regenerate();
+                Regenerate(parametersChanged: true);
             }
         }
 
@@ -50,46 +52,78 @@ namespace CristalLab.Pages {
             bitmap.Invalidate();
         }
 
-        private void Regenerate() {
+        private TextureSize CalculateBitmapSize() {
+            var actualSize = BitmapContainer.ActualSize;
+            int smallerDimension = Math.Min((int)actualSize.X,(int)actualSize.Y);
+            int newSize = Math.Max(smallerDimension,TEMP_BITMAP_SIZE * 2);
+            return new TextureSize(newSize);
+        }
+
+        private void Regenerate(bool parametersChanged = true) {
             if(!IsLoaded) {
                 return;
             }
 
+            var fullSize = CalculateBitmapSize();
+
+            if(_fullOutput is null) {
+                _fullOutput = new WriteableBitmap(fullSize.Width,fullSize.Height);
+            } else {
+                bool sizeChanged = _fullOutput.PixelWidth != fullSize.Width || _fullOutput.PixelHeight != fullSize.Height;
+                if(sizeChanged) {
+                    bool smallerOrEqual = fullSize.Width <= _fullOutput.PixelWidth || fullSize.Height <= _fullOutput.PixelHeight;
+                    if(!parametersChanged && smallerOrEqual) {
+                        return;
+                    }
+                    _fullOutput = new WriteableBitmap(fullSize.Width,fullSize.Height);
+                } else if(!parametersChanged) {
+                    return;
+                }
+            }
+
             _cancellationTokenSource?.Cancel();
             _cancellationTokenSource = new();
-
             var token = _cancellationTokenSource.Token;
 
             _tempOutput ??= new(TEMP_BITMAP_SIZE,TEMP_BITMAP_SIZE);
 
-            var fullOutputSize = new TextureSize(FULL_RES_BITMAP_SIZE); //TODO: measure BitmapContainer, get next power of 2 up (can use 'System.Numerics.BitOperations.RoundUpToPowerOf2')
-            if(_fullOutput is null || _fullOutput.PixelWidth != fullOutputSize.Width || _fullOutput.PixelHeight != fullOutputSize.Height) {
-                _fullOutput = new WriteableBitmap(fullOutputSize.Width,fullOutputSize.Height);
-            }
-
             var dispatcher = DispatcherQueue;
-            var cristalFactory = Session.CristalFactory;
+            var cristal = Session.Cristal;
+
+            _openSimplex ??= cristal.CreateOpenSimplex(FIXED_SEED);
 
             var noiseScale = (float)ScaleSlider.Value;
+            var openSimplex = _openSimplex;
 
-            IslandFilterConfig? islandConfig = IslandToggleSwitch.IsOn ? new(
-                (float)IslandPivotSlider.Value,
-                (float)IslandRolloffSlider.Value
-            ) : null;
+            NoiseTextureConfig config = new(
+                Scale: (float)ScaleSlider.Value,
+                IslandFilterEnabled: IslandToggleSwitch.IsOn,
+                IslandCenter: (float)IslandPivotSlider.Value,
+                IslandRange: (float)IslandRolloffSlider.Value
+            );
+
+            ResolutionText.Text = $"Loading...";
+            RenderProgressBar.IsIndeterminate = true;
 
             Task.Run(async () => {
                 Texture<byte>? texture = null;
                 try {
                     await Task.Delay(FULL_RES_DELAY,token);
-                    var config = new NoiseTextureConfig(new TextureSize(FULL_RES_BITMAP_SIZE),noiseScale,FIXED_SEED,islandConfig);
-                    texture = cristalFactory.CreateNoiseTexture(config,token);
+
+                    texture = cristal.CreateNoiseTexture(fullSize,openSimplex,config,token);
+
                     token.ThrowIfCancellationRequested();
+
                     dispatcher.TryEnqueue(() => {
                         if(token.IsCancellationRequested || texture is null) {
                             return;
                         }
                         PushTextureToBitmap(texture.Value,_fullOutput);
+
                         BitmapContainer.Source = _fullOutput;
+                        ResolutionText.Text = $"{_fullOutput.PixelWidth}x{_fullOutput.PixelHeight}";
+                        RenderProgressBar.IsIndeterminate = false;
+
                         texture?.Dispose();
                         texture = null;
                     });
@@ -104,26 +138,36 @@ namespace CristalLab.Pages {
                 }
             },token);
 
-            var config = new NoiseTextureConfig(new TextureSize(TEMP_BITMAP_SIZE),noiseScale,FIXED_SEED,islandConfig);
-            using var texture = cristalFactory.CreateNoiseTexture(config);
-            PushTextureToBitmap(texture,_tempOutput);
-            BitmapContainer.Source = _tempOutput;
+            if(parametersChanged) {
+                TextureSize shortSize = new(TEMP_BITMAP_SIZE);
+                using var tmpTexture = cristal.CreateNoiseTexture(shortSize,openSimplex,config);
+                PushTextureToBitmap(tmpTexture,_tempOutput);
+
+                BitmapContainer.Source = _tempOutput;
+            }
         }
 
         private void IslandRolloffSlider_ValueChanged(object sender,Microsoft.UI.Xaml.Controls.Primitives.RangeBaseValueChangedEventArgs e) {
-            Regenerate();
+            Regenerate(parametersChanged: true);
         }
 
         private void IslandPivotSlider_ValueChanged(object sender,Microsoft.UI.Xaml.Controls.Primitives.RangeBaseValueChangedEventArgs e) {
-            Regenerate();
+            Regenerate(parametersChanged: true);
         }
 
         private void IslandToggleSwitch_Toggled(object sender,RoutedEventArgs e) {
-            Regenerate();
+            Regenerate(parametersChanged: true);
         }
 
         private void ScaleSlider_ValueChanged(object sender,Microsoft.UI.Xaml.Controls.Primitives.RangeBaseValueChangedEventArgs e) {
-            Regenerate();
+            Regenerate(parametersChanged: true);
+        }
+
+        private void BitmapContainer_SizeChanged(object sender,SizeChangedEventArgs e) {
+            if(e.NewSize == e.PreviousSize) {
+                return;
+            }
+            Regenerate(parametersChanged: false);
         }
     }
 }

@@ -111,6 +111,15 @@
                     />
             </Grid>
 
+            <TextBlock
+                Style="{ThemeResource BodyTextBlockStyle}"
+            >
+                <Run Text="Resolution: "/>
+                <Run x:Name="ResolutionText" FontWeight="SemiBold" Text="0"/>
+            </TextBlock>
+
+            <ProgressBar x:Name="RenderProgressBar" Value="100" IsIndeterminate="False" ShowPaused="False" ShowError="False" />
+
         </StackPanel>
         <Grid
             Background="{ThemeResource CardBackgroundFillColorDefaultBrush}"
@@ -125,7 +134,9 @@
                 x:Name="BitmapContainer"
                 Stretch="Uniform"
                 HorizontalAlignment="Stretch"
-                VerticalAlignment="Stretch"/>
+                VerticalAlignment="Stretch"
+                SizeChanged="BitmapContainer_SizeChanged"
+                />
         </Grid>
     </Grid>
 </cristallab:WorkspacePage>

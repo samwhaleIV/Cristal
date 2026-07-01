@@ -31,7 +31,9 @@ namespace CristalLab {
             sender.SelectedItem = newTab;
         }
 
-        private void RootTabView_TabCloseRequested(TabView sender,TabViewTabCloseRequestedEventArgs args) => sender.TabItems.Remove(args.Tab);
+        private void RootTabView_TabCloseRequested(TabView sender,TabViewTabCloseRequestedEventArgs args) {
+            sender.TabItems.Remove(args.Tab);
+        }
 
         private void RootTabView_Loaded(object sender,RoutedEventArgs e) {
             var newTab = CreateDefaultTab();

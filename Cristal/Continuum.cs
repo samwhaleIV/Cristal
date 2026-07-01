@@ -1,5 +1,5 @@
-﻿using System.Buffers;
-using Cristal.Pipeline.Filters;
+﻿using Cristal.Pipeline.Filters;
+using System.Buffers;
 
 namespace Cristal {
     /// <summary>
@@ -42,25 +42,35 @@ namespace Cristal {
             _random = new Random(seed);
         }
 
-        public Texture<byte> CreateNoiseTexture(NoiseTextureConfig config,CancellationToken? token = null) {
+        public OpenSimplexNoiseFast CreateOpenSimplex(long? seed = null) {
+            return new OpenSimplexNoiseFast(seed ?? _random.NextInt64());
+        }
 
-            var scale = 1.0f / config.Size.Height * config.Scale;
+        public Texture<byte> CreateNoiseTexture(TextureSize size,OpenSimplexNoiseFast openSimplexNoise,NoiseTextureConfig config,CancellationToken? token = null) {
 
-            var pipeline = PipelineFactory.CreatePipeline<Point,float,Noise>(new(config.Seed ?? _random.NextInt64(),scale))
-                .AppendOptional<IslandFilter>(new(config.IslandFilterConfig.GetValueOrDefault()),config.IslandFilterConfig.HasValue)
-                .Append<float,ToSRGB>()
+            var scale = 1.0f / size.Height * config.Scale;
+
+            IslandFilter islandFilter = new(config.IslandCenter,config.IslandRange);
+
+            float offsetBase = config.HalfPixelOffsetEnabled ? 0.5f : 0.0f;
+
+            float xOffset = offsetBase + size.Width * -config.OriginX;
+            float yOffset = offsetBase + size.Height * -config.OriginY;
+
+            var pipeline = PipelineFactory.CreatePipeline<Point,float,Noise>(new(openSimplexNoise,scale,xOffset,yOffset))
+                .AppendOptional(islandFilter,config.IslandFilterEnabled)
                 .Append<byte,FloatToByte>();
 
-            TextureSize size = config.Size;
             Texture<byte> texture = new(size,_arrayPool);
             Span<byte> data = texture.Data;
+
+            int i = 0;
 
             for(int y = 0;y < size.Height;y++) {
 
                 for(int x = 0;x < size.Width;x++) {
                     byte value = pipeline.Process(new Point(x,y));
-                    int index = y * size.Width + x;
-                    data[index] = value;
+                    data[i++] = value;
 
                     token?.ThrowIfCancellationRequested();
                 }
@@ -71,9 +81,12 @@ namespace Cristal {
     }
 
     public readonly record struct NoiseTextureConfig(
-        TextureSize Size,
         float Scale = 1.0f,
-        long? Seed = null,
-        IslandFilterConfig? IslandFilterConfig = null
+        float OriginX = 0.5f,
+        float OriginY = 0.5f,
+        bool HalfPixelOffsetEnabled = true,
+        bool IslandFilterEnabled = false,
+        float IslandCenter = 0.5f,
+        float IslandRange = 0.05f
     );
 }

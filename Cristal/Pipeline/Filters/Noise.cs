@@ -1,9 +1,12 @@
 ﻿namespace Cristal.Pipeline.Filters {
-    public readonly struct Noise(long seed,float scale):IFilter<Point,float> {
+    public readonly struct Noise(OpenSimplexNoiseFast openSimplex,float scale,float offsetX,float offsetY):IFilter<Point,float> {
         public float Process(Point coordinate) {
-            float value = OpenSimplex2S.Noise2_ImproveX(seed,coordinate.X * scale,coordinate.Y * scale); //might need half pixel offset
+            float x = (coordinate.X + offsetX) * scale;
+            float y = (coordinate.Y + offsetY) * scale;
 
-            // Value is in range '-1.0' to '1.0', apply basic formula to align to '0.0' to '1.0.
+            float value = (float)openSimplex.Evaluate(x,y);
+
+            //Normalize '-1.0' to '1.0' to '0.0' to '1.0'
             value = MathF.FusedMultiplyAdd(value,0.5f,0.5f);
 
             return value;
