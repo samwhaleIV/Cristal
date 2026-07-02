@@ -1,5 +1,5 @@
-﻿namespace Cristal.Pipeline.Filters {
-    public readonly struct Island(float center,float range):IFilter<float,float> {
+﻿namespace Cristal.Pipeline.Functions {
+    public readonly struct IslandFilter(float center,float range):IFunction<float,float> {
 
         private readonly record struct IslandRange(float Floor,float Ceiling) {
             public readonly float Reciprocal { get; init; } = 1.0f / (Ceiling - Floor);
@@ -17,7 +17,7 @@
             } else if(value >= 1f) {
                 return 1f;
             } else {
-                return value * value * MathF.FusedMultiplyAdd(value,-2f,3);
+                return value * value * (3f - 2f * value);
             }
         }
     }

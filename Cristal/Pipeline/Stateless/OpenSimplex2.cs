@@ -1,11 +1,11 @@
 ﻿/*
  * Public Domain/Unlicense from https://github.com/KdotJPG/OpenSimplex2/blob/master/csharp/OpenSimplex2.cs
  * Modifications made as needed.
- */
+*/
 
 using System.Runtime.CompilerServices;
 
-namespace Cristal {
+namespace Cristal.Pipeline.Stateless {
     public static class OpenSimplex2 {
         private const long PRIME_X = 0x5205402B9270C86FL;
         private const long PRIME_Y = 0x598CD327003817B5L;

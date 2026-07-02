@@ -1,32 +1,50 @@
 ﻿namespace Cristal {
-    public readonly struct TextureSize {
+    /// <summary>
+    /// Used as a description or request for a texture of a specific size.
+    /// The default value state guarantees a minimum size of <c>1x1</c>.
+    /// </summary>
+    public readonly record struct TextureSize {
 
-        public readonly int Width => int.Max(field,1);
-        public readonly int Height => int.Max(field,1);
+        /// <summary>
+        /// Horizontal component (X) with a fixed lower bound of <c>1</c>.
+        /// Not recommended for hot paths.
+        /// </summary>
+        public int Width => Math.Max(1,field);
+
+        /// <summary>
+        /// Vertical component (Y) with a fixed lower bound of <c>1</c>.
+        /// Not recommended for hot paths.
+        /// </summary>
+        public int Height => Math.Max(1,field);
+
+        /// <summary>
+        /// Total area provided as width times height with a fixed lower bound of <c>1</c>.
+        /// Not recommended for hot paths.
+        /// </summary>
         public int Area => Width * Height;
 
+        /// <summary>
+        /// Creates and validates a square size description with the provided dimensional length value, <paramref name="size"/>.
+        /// </summary>
+        /// <param name="size">Horizontal (X) and vertical component (Y). I.e., the square root.</param>
+        /// <exception cref="ArgumentOutOfRangeException">Dimensions must be greater or equal to 1.</exception>
         public TextureSize(int size) {
+            ArgumentOutOfRangeException.ThrowIfLessThan(size,1,nameof(size));
             Width = size;
             Height = size;
         }
 
+        /// <summary>
+        /// Creates and validates a size description for any aspect ratio using the provided dimensional length values.
+        /// </summary>
+        /// <param name="width">Horizontal component (X). Must be greater or equal to <c>1</c>.</param>
+        /// <param name="height">Vertical component (Y). Must be greater or equal to <c>1</c>.</param>
+        /// <exception cref="ArgumentOutOfRangeException">Dimensions must be greater or equal to 1.</exception>
         public TextureSize(int width,int height) {
+            ArgumentOutOfRangeException.ThrowIfLessThan(width,1,nameof(width));
+            ArgumentOutOfRangeException.ThrowIfLessThan(height,1,nameof(height));
             Width = width;
             Height = height;
         }
-
-        public static TextureSize Square2 => new(2);
-        public static TextureSize Square4 => new(4);
-        public static TextureSize Square8 => new(8);
-        public static TextureSize Square16 => new(16);
-        public static TextureSize Square32 => new(32);
-        public static TextureSize Square64 => new(64);
-        public static TextureSize Square128 => new(128);
-        public static TextureSize Square256 => new(256);
-        public static TextureSize Square512 => new(512);
-        public static TextureSize Square1024 => new(1024);
-        public static TextureSize Square2048 => new(2048);
-        public static TextureSize Square4096 => new(4096);
-        public static TextureSize Square8192 => new(8192);
     }
 }

@@ -1,5 +1,7 @@
-﻿using Cristal.Pipeline.Filters;
+﻿using Cristal.Pipeline;
+using Cristal.Pipeline.Functions;
 using System.Buffers;
+using System.Runtime.InteropServices;
 
 namespace Cristal {
     /// <summary>
@@ -45,12 +47,12 @@ namespace Cristal {
         public ByteBuffer MonochromeToRGBA(Texture<byte> texture) {
             ByteBuffer buffer = new(texture.Size.Area * 4,_arrayPool);
 
-            Span<byte> rgba = buffer.CreateSpan();
-            ReadOnlySpan<byte> mc = texture.CreateSpan();
+            Span<byte> rgba = buffer.AsSpan();
+            ReadOnlySpan<byte> mc = texture.AsSpan();
 
             for(int i = 0;i<mc.Length;i++) {
                 byte value = mc[i];
-                rgba[(i*4)] = value;
+                rgba[(i*4) + 0] = value;
                 rgba[(i*4) + 1] = value;
                 rgba[(i*4) + 2] = value;
                 rgba[(i*4) + 3] = byte.MaxValue;
@@ -58,66 +60,75 @@ namespace Cristal {
             return buffer;
         }
 
-        private Texture<byte> CreateNoiseTexture(TextureSize size,NoiseTextureConfig config,bool parallelExecutionEnabled = false,CancellationToken? cancellationToken = null) {
+        private Texture<TTextureData> ProcessTexturePipeline<TTextureData,TParentOut,TParent,TFilter>(
+            Node<Coordinate,TParentOut,TTextureData,TParent,TFilter> pipeline,
+            TextureProcessorConfig config
+        )
+            where TParent : IFunction<Coordinate,TParentOut>
+            where TFilter : IFunction<TParentOut,TTextureData>
+            where TTextureData : struct
+        {
+            Texture<TTextureData> texture = new(config.Size,_arrayPool);
 
-            float halfPixelOffset = config.HalfPixelOffsetEnabled ? 0.5f : 0.0f;
-            float xOffset = MathF.FusedMultiplyAdd(size.Width,-config.OriginX,halfPixelOffset);
-            float yOffset = MathF.FusedMultiplyAdd(size.Height,-config.OriginY,halfPixelOffset);
+            int width = config.Size.Width, height = config.Size.Height;
 
-            float scale = 1.0f / size.Height * config.Scale;
-            Noise noise = new(config.Seed ?? _random.NextInt64(),scale,xOffset,yOffset);
-            Island island = new(config.IslandCenter,config.IslandRange);
+            if(config.ParallelProcessingEnabled) {
+                Memory<byte> textureData = texture.AsMemory();
 
-            Texture<byte> texture = new(size,_arrayPool);
-            byte[] data = texture.GetInternalArray();
-
-            var pipeline = PipelineFactory.CreatePipeline<Point,float,Noise>(noise)
-                .AppendOptional(island,config.IslandFilterEnabled)
-                .Append<byte,FloatToByte>();
-
-            int width = size.Width;
-
-            if(parallelExecutionEnabled) {
                 ParallelOptions options = new();
-                if(cancellationToken.HasValue) {
-                    options.CancellationToken = cancellationToken.Value;
+                if(config.CancellationToken.HasValue) {
+                    options.CancellationToken = config.CancellationToken.Value;
                 }
-                Parallel.For(0,size.Height,options,y => {
-                    int rowStart = y * width;
+
+                Parallel.For(0,height,options,y => {
+                    Span<TTextureData> typedData = MemoryMarshal.Cast<byte,TTextureData>(textureData.Span);
+                    int i = y * width;
                     for(int x = 0;x < width;x++) {
-                        byte value = pipeline.Process(new Point(x,y));
-                        data[rowStart + x] = value;
+                        TTextureData value = pipeline.Process(new Coordinate(x,y));
+                        typedData[i + x] = value;
                     }
                 });
             } else {
+                Span<TTextureData> textureData = texture.AsSpan();
                 int i = 0;
-                for(int y = 0;y < size.Height;y++) {
-                    for(int x = 0;x < size.Width;x++) {
-                        byte value = pipeline.Process(new Point(x,y));
-                        data[i++] = value;
+                if(config.CancellationToken.HasValue) {
+                    var cancellationToken = config.CancellationToken.Value;
+                    for(int y = 0;y < height;y++) {
+                        cancellationToken.ThrowIfCancellationRequested();
+                        for(int x = 0;x < width;x++) {
+                            TTextureData value = pipeline.Process(new Coordinate(x,y));
+                            textureData[i++] = value;
+                        }
+                    }
+                } else {
+                    for(int y = 0;y < height;y++) {
+                        for(int x = 0;x < width;x++) {
+                            TTextureData value = pipeline.Process(new Coordinate(x,y));
+                            textureData[i++] = value;
+                        }
                     }
                 }
             }
             return texture;
         }
 
-        public Texture<byte> CreateNoiseTexture(TextureSize size,NoiseTextureConfig config) {
-            return CreateNoiseTexture(size, config, parallelExecutionEnabled: false, cancellationToken: null);
-        }
+        public Texture<byte> CreateNoiseTexture(NoiseTextureConfig noiseConfig,TextureProcessorConfig processorConfig) {
 
-        public Texture<byte> CreateNoiseTextureParallel(TextureSize size,NoiseTextureConfig config,CancellationToken? cancellationToken = null) {
-            return CreateNoiseTexture(size, config, parallelExecutionEnabled: true, cancellationToken);
+            float baseOffset = noiseConfig.HalfPixelOffsetEnabled ? 0.5f : 0.0f;
+            float xOffset = processorConfig.Size.Width * -noiseConfig.OriginX + baseOffset;
+            float yOffset = processorConfig.Size.Height * -noiseConfig.OriginY + baseOffset;
+
+            float scale = 1.0f / processorConfig.Size.Height * noiseConfig.Scale;
+            OpenSimplexNoise noise = new(noiseConfig.Seed ?? _random.NextInt64(),scale,xOffset,yOffset);
+
+            if(noiseConfig.IslandFilterEnabled) {
+                IslandFilter island = new(noiseConfig.IslandCenter,noiseConfig.IslandRange);
+                var pipeline = PipelineFactory.CreatePipeline<Coordinate,float,OpenSimplexNoise>(noise).Append<float,IslandFilter>(island).Append<byte,FloatToByte>();
+                return ProcessTexturePipeline(pipeline,processorConfig);
+            } else {
+                var pipeline = PipelineFactory.CreatePipeline<Coordinate,float,OpenSimplexNoise>(noise).Append<byte,FloatToByte>();
+                return ProcessTexturePipeline(pipeline,processorConfig);
+            }
         }
     }
-
-    public readonly record struct NoiseTextureConfig(
-        float Scale = 1.0f,
-        float OriginX = 0.5f,
-        float OriginY = 0.5f,
-        bool HalfPixelOffsetEnabled = true,
-        bool IslandFilterEnabled = false,
-        float IslandCenter = 0.5f,
-        float IslandRange = 0.05f,
-        long? Seed = null
-    );
 }

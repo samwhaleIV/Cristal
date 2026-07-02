@@ -7,34 +7,30 @@ namespace Cristal {
     public struct Texture<T>:IDisposable where T:struct {
 
         public readonly TextureSize Size { get; }
-        private readonly int Length { get; }
+        private readonly int ArraySliceLength { get; }
 
         private ArrayPool<byte>? ArrayPool { get; set; }
         private byte[]? Array { get; set; }
 
         internal Texture(TextureSize size,ArrayPool<byte> arrayPool) {
             Size = size;
-            Length = size.Area * Unsafe.SizeOf<T>();
+            ArraySliceLength = size.Area * Unsafe.SizeOf<T>();
             ArrayPool = arrayPool;
-            Array = ArrayPool.Rent(Length);
+            Array = ArrayPool.Rent(ArraySliceLength);
         }
 
-        public readonly Span<T> CreateSpan() {
+        internal readonly Span<T> AsSpan() {
             if(Array is null) {
                 return [];
             }
-            return MemoryMarshal.Cast<byte,T>(new Span<byte>(Array,0,Length));
+            return MemoryMarshal.Cast<byte,T>(new Span<byte>(Array,0,ArraySliceLength));
         }
 
-        public readonly ReadOnlySpan<T> CreateReadOnlySpan() {
+        internal readonly Memory<byte> AsMemory() {
             if(Array is null) {
-                return [];
+                return Memory<byte>.Empty;
             }
-            return MemoryMarshal.Cast<byte,T>(new ReadOnlySpan<byte>(Array,0,Length));
-        }
-
-        internal readonly byte[] GetInternalArray() {
-            return Array ?? [];
+            return Array.AsMemory(0,ArraySliceLength);
         }
 
         public void Dispose() {

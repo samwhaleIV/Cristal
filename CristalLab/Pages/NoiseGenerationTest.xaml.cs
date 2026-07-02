@@ -1,5 +1,4 @@
 using Cristal;
-using Cristal.Pipeline.Filters;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Media.Imaging;
 using System;
@@ -13,7 +12,7 @@ namespace CristalLab.Pages {
 
     public sealed partial class NoiseGenerationTest:WorkspacePage {
 
-        private const long FIXED_SEED = 0;
+        private const int FIXED_SEED = 0;
         private const int TEMP_BITMAP_SIZE = 64;
         private const int FULL_RES_DELAY = 50;
 
@@ -36,7 +35,8 @@ namespace CristalLab.Pages {
 
         private static void PushTextureToBitmap(ByteBuffer buffer,WriteableBitmap bitmap) {
             using(var stream = bitmap.PixelBuffer.AsStream()) {
-                buffer.WriteToStream(stream);
+                stream.Seek(0,SeekOrigin.Begin);
+                buffer.WriteTo(stream);
             }
             bitmap.Invalidate();
         }
@@ -81,7 +81,7 @@ namespace CristalLab.Pages {
 
             var noiseScale = (float)ScaleSlider.Value;
 
-            NoiseTextureConfig config = new(
+            NoiseTextureConfig noiseConfig = new(
                 Scale: (float)ScaleSlider.Value,
                 IslandFilterEnabled: IslandToggleSwitch.IsOn,
                 IslandCenter: (float)IslandPivotSlider.Value,
@@ -106,7 +106,12 @@ namespace CristalLab.Pages {
                 try {
                     await Task.Delay(FULL_RES_DELAY,token);
 
-                    texture = cristal.CreateNoiseTextureParallel(fullSize,config,token);
+                    texture = cristal.CreateNoiseTexture(noiseConfig,new TextureProcessorConfig() {
+                        Size = fullSize,
+                        CancellationToken = token,
+                        ParallelProcessingEnabled = true
+                    });
+
                     rgbaData = cristal.MonochromeToRGBA(texture.Value);
                     texture.Value.Dispose();
                     texture = null;
@@ -137,8 +142,11 @@ namespace CristalLab.Pages {
             },token);
 
             if(parametersChanged) {
-                TextureSize shortSize = new(TEMP_BITMAP_SIZE);
-                var tmpTexture = cristal.CreateNoiseTexture(shortSize,config);
+                var tmpTexture = cristal.CreateNoiseTexture(noiseConfig,new TextureProcessorConfig() {
+                    Size = new TextureSize(TEMP_BITMAP_SIZE),
+                    CancellationToken = null,
+                    ParallelProcessingEnabled = false
+                });
                 var rgbaData = cristal.MonochromeToRGBA(tmpTexture);
                 tmpTexture.Dispose();
                 PushTextureToBitmap(rgbaData,_tempOutput);

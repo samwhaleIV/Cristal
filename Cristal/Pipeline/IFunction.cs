@@ -1,5 +1,5 @@
 ﻿namespace Cristal.Pipeline {
-    public interface IFilter<TIn,TOut> {
+    public interface IFunction<TIn,TOut> {
         public TOut Process(TIn input);
     }
 }

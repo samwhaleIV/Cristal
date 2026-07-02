@@ -1,5 +1,4 @@
 ﻿using System.Buffers;
-using System.Runtime.InteropServices;
 
 namespace Cristal {
 
@@ -24,24 +23,35 @@ namespace Cristal {
             ArrayPool = null;
         }
 
-        public readonly void WriteToStream(Stream stream) {
-            stream.Seek(0,SeekOrigin.Begin);
-            var data = Array ?? [];
-            stream.Write(data,0,Math.Min(data.Length,Length));
-        }
-
-        public readonly Span<byte> CreateSpan() {
+        internal readonly Span<byte> AsSpan() {
             if(Array is null) {
                 return [];
             }
             return new Span<byte>(Array,0,Length);
         }
 
-        public readonly ReadOnlySpan<byte> CreateReadOnlySpan() {
+        public readonly void WriteTo(Stream stream) {
+
+            // When desired, seeking to the stream's start is the caller's responsibility.
+
             if(Array is null) {
-                return [];
+                return;
             }
-            return new ReadOnlySpan<byte>(Array,0,Length);
+
+            // Limit of the stream (also limited to 32-bits)
+            int stride = (int)(stream.Length - stream.Position);
+
+            // FULL length of the array provided by the pool
+            if(Array.Length < stride) { 
+                stride = Array.Length;
+            }
+
+            // SHORT length of the array (our slice within the array - remember, the pool provides an array that may be larger than our target)
+            if(Length < stride) { 
+                stride = Length;
+            }
+
+            stream.Write(Array,0,stride);
         }
     }
 }
